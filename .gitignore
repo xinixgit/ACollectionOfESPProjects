@@ -5,5 +5,5 @@
 .vscode/launch.json
 .vscode/ipch
 
-config.json
+include/Config.h
 .DS_Store

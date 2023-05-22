@@ -1,19 +1,19 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include "Audio.h"
+#include "Config.h"
+#include "AudioPlayer.h"
 
-#define I2S_DOUT  26
-#define I2S_BCLK  14
-#define I2S_LRC   27
+Config config;
+AudioPlayer* audioPlayer;
 
-Audio audio;
+void audioPlayTaskCode(void*);
 
 void setup() {
   Serial.begin(9600);
 
   WiFi.disconnect();
   WiFi.mode(WIFI_STA);
-  WiFi.begin("XXX", "XXX");
+  WiFi.begin(config.wifi_ssid.c_str(), config.wifi_password.c_str());
  
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -27,49 +27,26 @@ void setup() {
   Serial.println(WiFi.localIP());
   Serial.println("");
 
-  // Connect MAX98357 I2S Amplifier Module
-  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
- 
-  // Set thevolume (0-100)
-  audio.setVolume(9);
+  audioPlayer = new AudioPlayer();
 
-  audio.connecttohost("mp3.ffh.de/radioffh/hqlivestream.aac");
+  xTaskCreatePinnedToCore(
+    audioPlayTaskCode,
+    "Play audio",
+    4096,
+    NULL,
+    10,
+    NULL,
+    0
+  );
+}
+
+void audioPlayTaskCode(void* parameter) {
+  audioPlayer->play();
+  for(;;) {  
+    audioPlayer->loop();
+  }
 }
 
 void loop() {
-  audio.loop();
-}
-
-void audio_info(const char *info) {
-  Serial.print("info        "); Serial.println(info);
-}
-void audio_id3data(const char *info) { //id3 metadata
-  Serial.print("id3data     "); Serial.println(info);
-}
-void audio_eof_mp3(const char *info) { //end of file
-  Serial.print("eof_mp3     "); Serial.println(info);
-}
-void audio_showstation(const char *info) {
-  Serial.print("station     "); Serial.println(info);
-}
-void audio_showstreaminfo(const char *info) {
-  Serial.print("streaminfo  "); Serial.println(info);
-}
-void audio_showstreamtitle(const char *info) {
-  Serial.print("streamtitle "); Serial.println(info);
-}
-void audio_bitrate(const char *info) {
-  Serial.print("bitrate     "); Serial.println(info);
-}
-void audio_commercial(const char *info) { //duration in sec
-  Serial.print("commercial  "); Serial.println(info);
-}
-void audio_icyurl(const char *info) { //homepage
-  Serial.print("icyurl      "); Serial.println(info);
-}
-void audio_lasthost(const char *info) { //stream URL played
-  Serial.print("lasthost    "); Serial.println(info);
-}
-void audio_eof_speech(const char *info) {
-  Serial.print("eof_speech  "); Serial.println(info);
+  
 }
