@@ -30,6 +30,8 @@ AudioPlayer::AudioPlayer()
   fetchPlaylist("0");
   playlist.sort();
   playlist.unique();
+  Serial.printf("Fetched %d songs.", playlist.size());
+  Serial.println();
 }
 
 void AudioPlayer::play()
