@@ -18,13 +18,14 @@ SoapESP32 soap(&client, &udp);
 void discoverDlnaServer();
 void fetchPlaylist(String);
 void playRandomSong();
+void setDefaultVolume();
 
 AudioPlayer::AudioPlayer()
 {
   // Connect MAX98357 I2S Amplifier Module
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   // Set thevolume (0-21)
-  audio.setVolume(9);
+  setDefaultVolume();
 
   discoverDlnaServer();
   fetchPlaylist("0");
@@ -42,6 +43,34 @@ void AudioPlayer::play()
 void AudioPlayer::loop()
 {
   audio.loop();
+}
+
+void AudioPlayer::onVolumeChangeRequested(const char *payload)
+{
+  int vol = std::stoi(payload);
+  audio.setVolume(vol);
+  Serial.printf("Audio volume changed to %d", vol);
+  Serial.println();
+}
+
+void AudioPlayer::onStateChangeRequested(const char *payload)
+{
+  if (strcmp(payload, "off") == 0)
+  {
+    audio.setVolume(0);
+    Serial.println("Audio muted.");
+    return;
+  }
+
+  if (strcmp(payload, "on") == 0)
+  {
+    setDefaultVolume();
+    Serial.println("Audio resumed.");
+    return;
+  }
+
+  Serial.print("Unable to identify payload: ");
+  Serial.println(payload);
 }
 
 void playRandomSong()
@@ -95,6 +124,11 @@ void fetchPlaylist(String objectId)
   {
     fetchPlaylist(dirIds[j]);
   }
+}
+
+void setDefaultVolume()
+{
+  audio.setVolume(9);
 }
 
 void audio_info(const char *info)

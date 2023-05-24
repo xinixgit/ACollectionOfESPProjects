@@ -1,4 +1,10 @@
+#ifndef MQTTHANDLER_H
+#define MQTTHANDLER_H
+
 #include "Config.h"
+
+typedef std::function<void(const char *)> OnAudioPlayerVolumeChange;
+typedef std::function<void(const char *)> OnAudioPlayerStateChange;
 
 struct MqttHandler
 {
@@ -6,5 +12,9 @@ struct MqttHandler
 
   MqttHandler(MqttConfig *);
   void connect();
-  void publishPayload(String payload);
+  void publishTemperatureSensorPayload(String payload);
+  void onAudioPlayerVolumeChange(OnAudioPlayerVolumeChange callback);
+  void onAudioPlayerStateChange(OnAudioPlayerStateChange callback);
 };
+
+#endif

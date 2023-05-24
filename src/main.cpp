@@ -14,7 +14,7 @@
 
 Config config;
 AudioPlayer *audioPlayer;
-MqttHandler *mqttHander;
+MqttHandler *mqttHandler;
 DHT dht(DHTPIN, DHTTYPE);
 
 void connectToWifi();
@@ -22,14 +22,14 @@ void connectToMqtt();
 String createMqttPayload(float, float);
 void setUpAudioPlayer(void *);
 void publishTemperatureMetrics(void *);
+void onAudioPlayerVolumeChange(const char *);
+void onAudioPlayerStateChange(const char *);
 
 void setup()
 {
   Serial.begin(9600);
 
   connectToWifi();
-
-  connectToMqtt();
 
   xTaskCreatePinnedToCore(
       setUpAudioPlayer,
@@ -41,6 +41,8 @@ void setup()
       0);
 
   delay(500);
+
+  connectToMqtt();
 
   xTaskCreatePinnedToCore(
       publishTemperatureMetrics,
@@ -81,20 +83,22 @@ void connectToWifi()
 
 void connectToMqtt()
 {
-  mqttHander = new MqttHandler(&config.mqtt_config);
-  mqttHander->connect();
+  mqttHandler = new MqttHandler(&config.mqtt_config);
+  mqttHandler->onAudioPlayerVolumeChange(onAudioPlayerVolumeChange);
+  mqttHandler->onAudioPlayerStateChange(onAudioPlayerStateChange);
+  mqttHandler->connect();
 }
 
 void publishTemperatureMetrics(void *parameter)
 {
   dht.begin();
-  const TickType_t xDelay = 5000 / portTICK_PERIOD_MS;
+  const TickType_t xDelay = ONE_MIN / portTICK_PERIOD_MS;
   for (;;)
   {
     float temperatureF = dht.readTemperature(true);
     float humidity = dht.readHumidity();
     String payload = createMqttPayload(temperatureF, humidity);
-    mqttHander->publishPayload(payload);
+    mqttHandler->publishTemperatureSensorPayload(payload);
     vTaskDelay(xDelay);
   }
 }
@@ -118,4 +122,14 @@ String createMqttPayload(float temperatureF, float humidity)
   String payload;
   serializeJson(doc, payload);
   return payload;
+}
+
+void onAudioPlayerVolumeChange(const char *payload)
+{
+  audioPlayer->onVolumeChangeRequested(payload);
+}
+
+void onAudioPlayerStateChange(const char *payload)
+{
+  audioPlayer->onStateChangeRequested(payload);
 }
