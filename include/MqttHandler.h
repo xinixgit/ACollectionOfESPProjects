@@ -3,8 +3,8 @@
 
 #include "Config.h"
 
-typedef std::function<void(const char *)> OnAudioPlayerVolumeChange;
-typedef std::function<void(const char *)> OnAudioPlayerStateChange;
+typedef std::function<void(const char *)> OnAudioPlayerVolumeChangeRequest;
+typedef std::function<void(const char *)> OnAudioPlayerStateChangeRequest;
 
 struct MqttHandler
 {
@@ -12,9 +12,10 @@ struct MqttHandler
 
   MqttHandler(MqttConfig *);
   void connect();
-  void publishTemperatureSensorPayload(String payload);
-  void onAudioPlayerVolumeChange(OnAudioPlayerVolumeChange callback);
-  void onAudioPlayerStateChange(OnAudioPlayerStateChange callback);
+  void publishTemperature(String payload);
+  void publishAudioPlayerState(String payload);
+  void onAudioPlayerVolumeChangeRequest(OnAudioPlayerVolumeChangeRequest callback);
+  void onAudioPlayerStateChangeRequest(OnAudioPlayerStateChangeRequest callback);
 };
 
 #endif

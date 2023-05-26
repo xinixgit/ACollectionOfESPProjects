@@ -1,134 +1,122 @@
+#include <ArduinoJson.h>
 #include "Audio.h"
 #include "AudioPlayer.h"
-#include "SoapESP32.h"
+#include "AudioSource.h"
+#include <esp_random.h>
 #include <list>
 
 #define I2S_DOUT 26
 #define I2S_BCLK 14
 #define I2S_LRC 27
 
-#define DLNA_PREFIX "http://192.168.0.181:8200/"
+int volume = 10; // start with 10
+std::list<String> playlist;
 
 Audio audio;
-std::list<String> playlist;
-WiFiClient client;
-WiFiUDP udp;
-SoapESP32 soap(&client, &udp);
+AudioSource *audioSource;
+PublishState publishStateFn;
 
-void discoverDlnaServer();
-void fetchPlaylist(String);
 void playRandomSong();
-void setDefaultVolume();
+
+void publishState(bool isRunning, int volume, const char *title = NULL)
+{
+  if (publishStateFn != NULL)
+  {
+    DynamicJsonDocument doc(64);
+    doc["is_on"] = isRunning;
+    doc["volume"] = volume;
+    doc["title"] = title;
+
+    String payload;
+    serializeJson(doc, payload);
+    publishStateFn(payload);
+  }
+}
 
 AudioPlayer::AudioPlayer()
 {
+  audioSource = new DLNAAudioSource();
   // Connect MAX98357 I2S Amplifier Module
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   // Set thevolume (0-21)
-  setDefaultVolume();
-
-  discoverDlnaServer();
-  fetchPlaylist("0");
-  playlist.sort();
-  playlist.unique();
-  Serial.printf("Fetched %d songs.", playlist.size());
-  Serial.println();
+  audio.setVolume(volume);
 }
 
+// only meant for external callers, internal func should use `playRandomSong`
+// since playlist should already be populated
 void AudioPlayer::play()
 {
+  playlist.clear();
+  playlist = audioSource->populatePlaylist();
   playRandomSong();
+  publishState(audioSource->isRunning, volume);
 }
 
 void AudioPlayer::loop()
 {
   audio.loop();
+  if (!audio.isRunning())
+  {
+    const TickType_t xDelay = 1000 / portTICK_PERIOD_MS;
+    vTaskDelay(xDelay);
+  }
 }
 
 void AudioPlayer::onVolumeChangeRequested(const char *payload)
 {
   int vol = std::stoi(payload);
+  volume = vol;
   audio.setVolume(vol);
-  Serial.printf("Audio volume changed to %d", vol);
-  Serial.println();
+  Serial.printf("Audio volume changed to %d\n", vol);
 }
 
 void AudioPlayer::onStateChangeRequested(const char *payload)
 {
   if (strcmp(payload, "off") == 0)
   {
-    audio.setVolume(0);
-    Serial.println("Audio muted.");
+    if (audio.isRunning())
+    {
+      // stream cannot be stopped, so we simply set volume to 0 to
+      // mute the music; the next song will not be played after this
+      audio.setVolume(0);
+      audioSource->stop(&audio);
+      Serial.println("Audio stopped.");
+    }
     return;
   }
 
   if (strcmp(payload, "on") == 0)
   {
-    setDefaultVolume();
-    Serial.println("Audio resumed.");
+    // here we check if audioSource is running instead of audio is running
+    // since audioSource may simply be muted previously
+    if (!audioSource->isRunning)
+    {
+      audio.setVolume(volume);
+      if (!audio.isRunning())
+      {
+        playRandomSong();
+      }
+      Serial.println("Audio started.");
+    }
     return;
   }
 
-  Serial.print("Unable to identify payload: ");
-  Serial.println(payload);
+  Serial.printf("Unable to identify payload: %s\n", payload);
+}
+
+void AudioPlayer::setPublishStateFn(PublishState fn)
+{
+  publishStateFn = fn;
 }
 
 void playRandomSong()
 {
-  int idx = rand() % playlist.size();
+  int idx = esp_random() % playlist.size();
   auto l_front = playlist.begin();
   std::advance(l_front, idx);
 
-  String uri = DLNA_PREFIX + *l_front;
-  audio.connecttohost(uri.c_str());
-}
-
-void discoverDlnaServer()
-{
-  uint8_t numServers = 0;
-  while (numServers == 0)
-  {
-    soap.seekServer();
-    numServers = soap.getServerCount();
-    Serial.print("Found dlna server count: ");
-    Serial.println(numServers);
-  }
-
-  soapServer_t srv;
-  soap.getServerInfo(0, &srv);
-  Serial.printf("Server[%d]: IP address: %s port: %d name: %s -> controlURL: %s\n",
-                0, srv.ip.toString().c_str(), srv.port, srv.friendlyName.c_str(), srv.controlURL.c_str());
-}
-
-void fetchPlaylist(String objectId)
-{
-  std::vector<String> dirIds{};
-  soapObjectVect_t browseResult;
-
-  soap.browseServer(0, objectId.c_str(), &browseResult);
-
-  for (int i = 0; i < browseResult.size(); i++)
-  {
-    soapObject_t object = browseResult[i];
-    if (object.isDirectory)
-    {
-      dirIds.push_back(object.id);
-    }
-    else
-    {
-      playlist.push_back(object.uri);
-    }
-  }
-
-  for (int j = 0; j < dirIds.size(); j++)
-  {
-    fetchPlaylist(dirIds[j]);
-  }
-}
-
-void setDefaultVolume()
-{
-  audio.setVolume(9);
+  String path = "" + *l_front;
+  audioSource->play(path, &audio);
 }
 
 void audio_info(const char *info)
@@ -140,12 +128,24 @@ void audio_id3data(const char *info)
 { // id3 metadata
   Serial.print("id3data     ");
   Serial.println(info);
+
+  std::string data;
+  data.append(info);
+  if (data.rfind("Title") == 0)
+  {
+    std::string title = data.substr(7);
+    publishState(audioSource->isRunning, volume, title.c_str());
+  }
 }
 void audio_eof_stream(const char *lastHost)
 { // end of webstream
   Serial.print("eof_stream     ");
   Serial.println(lastHost);
-  playRandomSong();
+
+  if (audioSource->isRunning)
+  {
+    playRandomSong();
+  }
 }
 void audio_showstation(const char *info)
 {

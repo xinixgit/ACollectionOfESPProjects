@@ -20,29 +20,32 @@ DHT dht(DHTPIN, DHTTYPE);
 void connectToWifi();
 void connectToMqtt();
 String createMqttPayload(float, float);
-void setUpAudioPlayer(void *);
+void startAudioPlayer(void *);
 void publishTemperatureMetrics(void *);
-void onAudioPlayerVolumeChange(const char *);
-void onAudioPlayerStateChange(const char *);
+void publishAudipPlayerStateFn(String);
 
 void setup()
 {
   Serial.begin(9600);
 
   connectToWifi();
+  delay(500);
+
+  mqttHandler = new MqttHandler(&config.mqtt_config);
+  audioPlayer = new AudioPlayer();
+
+  connectToMqtt();
+  delay(500);
 
   xTaskCreatePinnedToCore(
-      setUpAudioPlayer,
+      startAudioPlayer,
       "Play audio",
       4096,
       NULL,
       10,
       NULL,
       0);
-
   delay(500);
-
-  connectToMqtt();
 
   xTaskCreatePinnedToCore(
       publishTemperatureMetrics,
@@ -52,7 +55,6 @@ void setup()
       10,
       NULL,
       1);
-
   delay(500);
 }
 
@@ -83,9 +85,10 @@ void connectToWifi()
 
 void connectToMqtt()
 {
-  mqttHandler = new MqttHandler(&config.mqtt_config);
-  mqttHandler->onAudioPlayerVolumeChange(onAudioPlayerVolumeChange);
-  mqttHandler->onAudioPlayerStateChange(onAudioPlayerStateChange);
+  mqttHandler->onAudioPlayerVolumeChangeRequest([](const char *payload)
+                                                { audioPlayer->onVolumeChangeRequested(payload); });
+  mqttHandler->onAudioPlayerStateChangeRequest([](const char *payload)
+                                               { audioPlayer->onStateChangeRequested(payload); });
   mqttHandler->connect();
 }
 
@@ -98,14 +101,15 @@ void publishTemperatureMetrics(void *parameter)
     float temperatureF = dht.readTemperature(true);
     float humidity = dht.readHumidity();
     String payload = createMqttPayload(temperatureF, humidity);
-    mqttHandler->publishTemperatureSensorPayload(payload);
+    mqttHandler->publishTemperature(payload);
     vTaskDelay(xDelay);
   }
 }
 
-void setUpAudioPlayer(void *parameter)
+void startAudioPlayer(void *parameter)
 {
-  audioPlayer = new AudioPlayer();
+  audioPlayer->setPublishStateFn([](String payload)
+                                 { mqttHandler->publishAudioPlayerState(payload); });
   audioPlayer->play();
   for (;;)
   {
@@ -122,14 +126,4 @@ String createMqttPayload(float temperatureF, float humidity)
   String payload;
   serializeJson(doc, payload);
   return payload;
-}
-
-void onAudioPlayerVolumeChange(const char *payload)
-{
-  audioPlayer->onVolumeChangeRequested(payload);
-}
-
-void onAudioPlayerStateChange(const char *payload)
-{
-  audioPlayer->onStateChangeRequested(payload);
 }

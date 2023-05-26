@@ -2,13 +2,14 @@
 #include "MqttHandler.h"
 
 AsyncMqttClient mqttClient;
-OnAudioPlayerVolumeChange audioPlayerVolumeChangeCallback;
-OnAudioPlayerStateChange audioPlayerStateChangeCallback;
+OnAudioPlayerVolumeChangeRequest audioPlayerVolumeChangeRequestCallback;
+OnAudioPlayerStateChangeRequest audioPlayerStateChangeRequestCallback;
 
 void onConnect(bool);
 void onDisconnect(AsyncMqttClientDisconnectReason);
 void onPublish(uint16_t);
 void onMessage(char *, char *, AsyncMqttClientMessageProperties, size_t, size_t, size_t);
+void publishPayload(const char *, const char *);
 
 MqttHandler::MqttHandler(MqttConfig *config)
 {
@@ -28,27 +29,36 @@ void MqttHandler::connect()
   mqttClient.connect();
 }
 
-void MqttHandler::publishTemperatureSensorPayload(String payload)
+void MqttHandler::publishTemperature(String payload)
+{
+  publishPayload(MQTT_TOPIC_SENSOR_TEMPERATURE, payload.c_str());
+}
+
+void MqttHandler::publishAudioPlayerState(String payload)
+{
+  publishPayload(MQTT_TOPIC_AUDIOPLAYER_STATE_CHANGED, payload.c_str());
+}
+
+void MqttHandler::onAudioPlayerVolumeChangeRequest(OnAudioPlayerVolumeChangeRequest callback)
+{
+  audioPlayerVolumeChangeRequestCallback = callback;
+}
+
+void MqttHandler::onAudioPlayerStateChangeRequest(OnAudioPlayerStateChangeRequest callback)
+{
+  audioPlayerStateChangeRequestCallback = callback;
+}
+
+void publishPayload(const char *topic, const char *payload)
 {
   if (!mqttClient.connected())
   {
-    Serial.println("MQTT client is disconnected, unable to send payload");
+    Serial.printf("MQTT client is disconnected, unable to send payload to topic %s\n", topic);
     return;
   }
 
-  Serial.print("Publishing payload: ");
-  Serial.println(payload);
-  mqttClient.publish(MQTT_TOPIC_SENSOR_TEMPERATURE, 0, false, payload.c_str());
-}
-
-void MqttHandler::onAudioPlayerVolumeChange(OnAudioPlayerVolumeChange callback)
-{
-  audioPlayerVolumeChangeCallback = callback;
-}
-
-void MqttHandler::onAudioPlayerStateChange(OnAudioPlayerStateChange callback)
-{
-  audioPlayerStateChangeCallback = callback;
+  mqttClient.publish(topic, 0, false, payload);
+  Serial.printf("Payload published to topic %s: %s\n", topic, payload);
 }
 
 void onConnect(bool sessionPresent)
@@ -69,13 +79,13 @@ void onMessage(char *topic, char *payload, AsyncMqttClientMessageProperties prop
   Serial.printf("Payload received from topic %s: %s, %d, %d, %d", topic, fixed, len, index, total);
   Serial.println();
 
-  if (strcmp(topic, MQTT_TOPIC_AUDIOPLAYER_STATE_CHANGE) == 0 && audioPlayerStateChangeCallback != NULL)
+  if (strcmp(topic, MQTT_TOPIC_AUDIOPLAYER_CHANGE_STATE) == 0 && audioPlayerStateChangeRequestCallback != NULL)
   {
-    audioPlayerStateChangeCallback(fixed.c_str());
+    audioPlayerStateChangeRequestCallback(fixed.c_str());
   }
-  else if (strcmp(topic, MQTT_TOPIC_AUDIOPLAYER_VOL_CHANGE) == 0 && audioPlayerVolumeChangeCallback != NULL)
+  else if (strcmp(topic, MQTT_TOPIC_AUDIOPLAYER_CHANGE_VOL) == 0 && audioPlayerVolumeChangeRequestCallback != NULL)
   {
-    audioPlayerVolumeChangeCallback(fixed.c_str());
+    audioPlayerVolumeChangeRequestCallback(fixed.c_str());
   }
 }
 
