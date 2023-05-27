@@ -21,3 +21,12 @@ struct DLNAAudioSource : AudioSource
   void stop(Audio *);
   void resume(Audio *);
 };
+
+struct SDAudioSource : AudioSource
+{
+  SDAudioSource();
+  std::list<String> populatePlaylist();
+  void play(String, Audio *);
+  void stop(Audio *);
+  void resume(Audio *);
+};
