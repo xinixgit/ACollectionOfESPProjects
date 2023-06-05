@@ -5,24 +5,28 @@
 #include "Config.h"
 #include "AudioPlayer.h"
 #include "MqttHandler.h"
+#include "SensorHandler.h"
+
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
 
 #define ONE_MIN 60000
 
 // Temperature Sensor
-#define DHTPIN 2 // GPIO 2
+#define DHTPIN 13 // GPIO 13
 #define DHTTYPE DHT11
 
 Config config;
 AudioPlayer *audioPlayer;
 MqttHandler *mqttHandler;
+SensorHandler *sensorHandler;
 DHT dht(DHTPIN, DHTTYPE);
 
 void connectToWifi();
 void connectToMqtt();
-String createMqttPayload(float, float);
 void startAudioPlayer(void *);
-void publishTemperatureMetrics(void *);
-void publishAudipPlayerStateFn(String);
+void startSensor(void *);
 
 void setup()
 {
@@ -48,8 +52,8 @@ void setup()
   delay(500);
 
   xTaskCreatePinnedToCore(
-      publishTemperatureMetrics,
-      "Publish temperature metrics",
+      startSensor,
+      "Start publishing all sensor metrics",
       4096,
       NULL,
       10,
@@ -60,7 +64,6 @@ void setup()
 
 void loop()
 {
-  delay(1000);
 }
 
 void connectToWifi()
@@ -92,20 +95,6 @@ void connectToMqtt()
   mqttHandler->connect();
 }
 
-void publishTemperatureMetrics(void *parameter)
-{
-  dht.begin();
-  const TickType_t xDelay = ONE_MIN / portTICK_PERIOD_MS;
-  for (;;)
-  {
-    float temperatureF = dht.readTemperature(true);
-    float humidity = dht.readHumidity();
-    String payload = createMqttPayload(temperatureF, humidity);
-    mqttHandler->publishTemperature(payload);
-    vTaskDelay(xDelay);
-  }
-}
-
 void startAudioPlayer(void *parameter)
 {
   audioPlayer->setPublishStateFn([](String payload)
@@ -117,13 +106,20 @@ void startAudioPlayer(void *parameter)
   }
 }
 
-String createMqttPayload(float temperatureF, float humidity)
+void startSensor(void *parameter)
 {
-  DynamicJsonDocument doc(64);
-  doc["temperature_f"] = temperatureF;
-  doc["humidity"] = humidity;
+  dht.begin();
+  std::list<Sensor *> sensors = {
+      new TemperatureSensor{
+          &dht,
+          [](String payload)
+          { mqttHandler->publishTemperature(payload); }}};
+  sensorHandler = new SensorHandler(sensors);
 
-  String payload;
-  serializeJson(doc, payload);
-  return payload;
+  const TickType_t xDelay = ONE_MIN / portTICK_PERIOD_MS;
+  for (;;)
+  {
+    sensorHandler->publishAll();
+    vTaskDelay(xDelay);
+  }
 }

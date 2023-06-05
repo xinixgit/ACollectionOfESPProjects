@@ -20,9 +20,10 @@ SDAudioSource::SDAudioSource()
   if (!SD.begin(SD_CS))
   {
     Serial.println("Error accessing microSD card!");
-    while (true)
-      ;
+    return;
   }
+
+  Serial.println("SD ready.");
 }
 
 std::list<String> SDAudioSource::populatePlaylist()
@@ -33,22 +34,6 @@ std::list<String> SDAudioSource::populatePlaylist()
   return playlist;
 }
 
-void SDAudioSource::play(String path, Audio *audio)
-{
-  audio->connecttoFS(SD, path.c_str());
-}
-
-void SDAudioSource::stop(Audio *audio)
-{
-  this->isRunning = false;
-  audio->stopSong();
-}
-
-void SDAudioSource::resume(Audio *audio)
-{
-  this->isRunning = true;
-}
-
 void fetchPlaylist(File dir, std::list<String> *playlist)
 {
   while (true)
@@ -56,15 +41,50 @@ void fetchPlaylist(File dir, std::list<String> *playlist)
     File entry = dir.openNextFile();
     if (!entry)
     {
+      // no more file to read
       break;
     }
 
-    Serial.printf("Found file: %s\n", entry.name());
+    String entryName = String(entry.name());
+    if (entryName.startsWith("."))
+    {
+      // Meta data file used by Apple
+      continue;
+    }
+
     if (entry.isDirectory())
     {
       fetchPlaylist(entry, playlist);
+      continue;
     }
 
+    String currPath = String(dir.path()) + entryName;
+    playlist->push_back(currPath);
     entry.close();
+  }
+}
+
+void SDAudioSource::play(String path, Audio *audio)
+{
+  this->isRunning = true;
+  Serial.printf("Now playing %s from SD.", path.c_str());
+  audio->connecttoFS(SD, path.c_str());
+}
+
+void SDAudioSource::stop(Audio *audio)
+{
+  if (audio->isRunning())
+  {
+    this->isRunning = false;
+    audio->pauseResume();
+  }
+}
+
+void SDAudioSource::resume(Audio *audio)
+{
+  if (!audio->isRunning())
+  {
+    this->isRunning = true;
+    audio->pauseResume();
   }
 }

@@ -5,11 +5,11 @@
 #include <esp_random.h>
 #include <list>
 
-#define I2S_DOUT 26
-#define I2S_BCLK 14
+#define I2S_DOUT 25
+#define I2S_BCLK 26
 #define I2S_LRC 27
 
-int volume = 10; // start with 10
+int volume = 8; // default volume
 std::list<String> playlist;
 
 Audio audio;
@@ -35,7 +35,7 @@ void publishState(bool isRunning, int volume, const char *title = NULL)
 
 AudioPlayer::AudioPlayer()
 {
-  audioSource = new DLNAAudioSource();
+  audioSource = new SDAudioSource();
   // Connect MAX98357 I2S Amplifier Module
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   // Set thevolume (0-21)
@@ -138,10 +138,19 @@ void audio_id3data(const char *info)
   }
 }
 void audio_eof_stream(const char *lastHost)
-{ // end of webstream
+{ // end of stream
   Serial.print("eof_stream     ");
   Serial.println(lastHost);
 
+  if (audioSource->isRunning)
+  {
+    playRandomSong();
+  }
+}
+void audio_eof_mp3(const char *info)
+{ // end of file
+  Serial.print("eof_mp3     ");
+  Serial.println(info);
   if (audioSource->isRunning)
   {
     playRandomSong();

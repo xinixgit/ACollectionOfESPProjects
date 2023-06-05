@@ -76,8 +76,6 @@ void onConnect(bool sessionPresent)
 void onMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
 {
   String fixed = ((String)payload).substring(0, len);
-  Serial.printf("Payload received from topic %s: %s, %d, %d, %d", topic, fixed, len, index, total);
-  Serial.println();
 
   if (strcmp(topic, MQTT_TOPIC_AUDIOPLAYER_CHANGE_STATE) == 0 && audioPlayerStateChangeRequestCallback != NULL)
   {
