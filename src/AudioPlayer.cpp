@@ -4,12 +4,9 @@
 #include "AudioSource.h"
 #include <esp_random.h>
 #include <list>
+#include "Config.h"
 
-#define I2S_DOUT 25
-#define I2S_BCLK 26
-#define I2S_LRC 27
-
-int volume = 8; // default volume
+int volume = 6; // default volume
 std::list<String> playlist;
 
 Audio audio;

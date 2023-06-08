@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <DHT.h>
-#include <ArduinoJson.h>
+#include <Wire.h>
 #include "Config.h"
 #include "AudioPlayer.h"
 #include "MqttHandler.h"
@@ -11,17 +10,13 @@
 #include "SD.h"
 #include "SPI.h"
 
-#define ONE_MIN 60000
-
-// Temperature Sensor
-#define DHTPIN 13 // GPIO 13
-#define DHTTYPE DHT11
+#define TEN_MIN 600000
+#define USE_BME_SENSOR true
 
 Config config;
 AudioPlayer *audioPlayer;
 MqttHandler *mqttHandler;
 SensorHandler *sensorHandler;
-DHT dht(DHTPIN, DHTTYPE);
 
 void connectToWifi();
 void connectToMqtt();
@@ -108,15 +103,36 @@ void startAudioPlayer(void *parameter)
 
 void startSensor(void *parameter)
 {
-  dht.begin();
-  std::list<Sensor *> sensors = {
-      new TemperatureSensor{
-          &dht,
-          [](String payload)
-          { mqttHandler->publishTemperature(payload); }}};
+  Sensor *temperatureSensor;
+
+  if (USE_BME_SENSOR)
+  {
+    TwoWire *I2CBME = new TwoWire(0);
+    bool status = I2CBME->begin(BME_I2C_SDA, BME_I2C_SCL, 400000);
+    if (!status)
+    {
+      Serial.println("Could not find a valid BME280 sensor, check wiring!");
+      return;
+    }
+
+    Adafruit_BME280 *bme = new Adafruit_BME280();
+    bme->begin(0x76, I2CBME);
+    temperatureSensor = new BME280TemperatureSensor(bme, [](String payload)
+                                                    { mqttHandler->publishTemperature(payload); });
+  }
+  else
+  {
+    // default use DHT11 sensor
+    DHT *dht = new DHT(DHTPIN, DHTTYPE);
+    dht->begin();
+    temperatureSensor = new DHT11TemperatureSensor(dht, [](String payload)
+                                                   { mqttHandler->publishTemperature(payload); });
+  }
+
+  std::list<Sensor *> sensors = {temperatureSensor};
   sensorHandler = new SensorHandler(sensors);
 
-  const TickType_t xDelay = ONE_MIN / portTICK_PERIOD_MS;
+  const TickType_t xDelay = TEN_MIN / portTICK_PERIOD_MS;
   for (;;)
   {
     sensorHandler->publishAll();
