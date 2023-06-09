@@ -1,5 +1,6 @@
 #include <AsyncMqttClient.h>
 #include "MqttHandler.h"
+#include <vector>
 
 AsyncMqttClient mqttClient;
 OnAudioPlayerVolumeChangeRequest audioPlayerVolumeChangeRequestCallback;
@@ -27,6 +28,12 @@ void MqttHandler::connect()
 {
   Serial.println("Connecting to MQTT...");
   mqttClient.connect();
+}
+
+void MqttHandler::disconnect()
+{
+  Serial.println("Disconnecting from MQTT...");
+  mqttClient.disconnect();
 }
 
 void MqttHandler::publishTemperature(String payload)
@@ -64,9 +71,9 @@ void publishPayload(const char *topic, const char *payload)
 void onConnect(bool sessionPresent)
 {
   Serial.println("MQTT client is connected");
-  for (int i = 0; i < mqttTopicOfSubscription.size(); i++)
+  for (String s : MqttTopicOfSubscription)
   {
-    const char *topic = mqttTopicOfSubscription[i].c_str();
+    const char *topic = s.c_str();
     mqttClient.subscribe(topic, 0);
     Serial.print("Subscribed to topic: ");
     Serial.println(topic);

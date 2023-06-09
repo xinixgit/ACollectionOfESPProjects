@@ -12,6 +12,7 @@ struct MqttHandler
 
   MqttHandler(MqttConfig *);
   void connect();
+  void disconnect();
   void publishTemperature(String payload);
   void publishAudioPlayerState(String payload);
   void onAudioPlayerVolumeChangeRequest(OnAudioPlayerVolumeChangeRequest callback);
