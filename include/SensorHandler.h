@@ -1,10 +1,17 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <Wire.h>
 #include <Adafruit_BME280.h>
 #include <DHT.h>
 #include <list>
 
 typedef std::function<void(String)> PublishFn;
+
+enum TemperatureSensorType
+{
+  DHT11Sensor,
+  BME280Sensor
+};
 
 struct Sensor
 {
@@ -94,6 +101,48 @@ struct BME280TemperatureSensor : TemperatureSensor
   }
 };
 
+TemperatureSensor *initTemperatureSensor(TemperatureSensorType sensorType, PublishFn publishFn)
+{
+  TemperatureSensor *temperatureSensor = nullptr;
+  switch (sensorType)
+  {
+  case DHT11Sensor:
+  {
+    DHT *dht = new DHT(DHTPIN, DHTTYPE);
+    dht->begin();
+    temperatureSensor = new DHT11TemperatureSensor(dht, publishFn);
+    break;
+  }
+  case BME280Sensor:
+  {
+    TwoWire *I2CBME;
+#ifdef ESP8266
+    I2CBME = new TwoWire();
+    I2CBME->begin(BME_I2C_SDA, BME_I2C_SCL);
+#elif defined(ESP32)
+    I2CBME = new TwoWire(0);
+    bool status = I2CBME->begin(BME_I2C_SDA, BME_I2C_SCL);
+    if (!status)
+    {
+      Serial.println("Could not find a valid BME280 sensor, check wiring!");
+      break;
+    }
+#else
+#error "Unsupported platform"
+#endif
+
+    Adafruit_BME280 *bme = new Adafruit_BME280();
+    bme->begin(0x76, I2CBME);
+    temperatureSensor = new BME280TemperatureSensor(bme, publishFn);
+    break;
+  }
+
+  default:
+    break;
+  }
+  return temperatureSensor;
+}
+
 struct SensorHandler
 {
   std::list<Sensor *> sensors;
@@ -101,6 +150,15 @@ struct SensorHandler
   {
     this->sensors = sensors;
   };
+
+  SensorHandler(PublishFn publishFn, TemperatureSensorType temperatureSensorType = DHT11Sensor)
+  {
+    auto temperatureSensor = initTemperatureSensor(temperatureSensorType, publishFn);
+    if (temperatureSensor != nullptr)
+    {
+      this->sensors.push_back(temperatureSensor);
+    }
+  }
 
   void publishAll()
   {

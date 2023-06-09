@@ -6,7 +6,7 @@
 #include <list>
 #include "Config.h"
 
-int volume = 6; // default volume
+int volume = 9; // default volume
 std::list<String> playlist;
 
 Audio audio;

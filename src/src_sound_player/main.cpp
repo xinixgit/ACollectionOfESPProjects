@@ -11,7 +11,6 @@
 #include "SPI.h"
 
 #define TEN_MIN 600000
-#define USE_BME_SENSOR true
 
 Config config;
 AudioPlayer *audioPlayer;
@@ -32,6 +31,9 @@ void setup()
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
   audioPlayer = new AudioPlayer();
+  sensorHandler = new SensorHandler([](String payload)
+                                    { mqttHandler->publishTemperature(payload); },
+                                    BME280Sensor);
 
   connectToMqtt();
   delay(500);
@@ -103,35 +105,6 @@ void startAudioPlayer(void *parameter)
 
 void startSensor(void *parameter)
 {
-  Sensor *temperatureSensor;
-
-  if (USE_BME_SENSOR)
-  {
-    TwoWire *I2CBME = new TwoWire(0);
-    bool status = I2CBME->begin(BME_I2C_SDA, BME_I2C_SCL, 400000);
-    if (!status)
-    {
-      Serial.println("Could not find a valid BME280 sensor, check wiring!");
-      return;
-    }
-
-    Adafruit_BME280 *bme = new Adafruit_BME280();
-    bme->begin(0x76, I2CBME);
-    temperatureSensor = new BME280TemperatureSensor(bme, [](String payload)
-                                                    { mqttHandler->publishTemperature(payload); });
-  }
-  else
-  {
-    // default use DHT11 sensor
-    DHT *dht = new DHT(DHTPIN, DHTTYPE);
-    dht->begin();
-    temperatureSensor = new DHT11TemperatureSensor(dht, [](String payload)
-                                                   { mqttHandler->publishTemperature(payload); });
-  }
-
-  std::list<Sensor *> sensors = {temperatureSensor};
-  sensorHandler = new SensorHandler(sensors);
-
   const TickType_t xDelay = TEN_MIN / portTICK_PERIOD_MS;
   for (;;)
   {

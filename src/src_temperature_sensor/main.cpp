@@ -1,17 +1,11 @@
 #include <ESP8266WiFi.h>
 #include <WifiClient.h>
-#include <DHT.h>
 #include <ArduinoJson.h>
-#include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
 #include "Config.h"
 #include "MqttHandler.h"
 #include "SensorHandler.h"
 
 #define TEN_MIN 600000
-
-#define USE_BME_SENSOR false
 
 Config config;
 WiFiEventHandler wifiConnectHandler;
@@ -30,7 +24,8 @@ void setup()
   Serial.begin(9600);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
-  initSensors();
+  sensorHandler = new SensorHandler([](String payload)
+                                    { mqttHandler->publishTemperature(payload); });
 
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
   wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
@@ -70,38 +65,6 @@ void connectToWifi()
     Serial.print(".");
     delay(1000);
   }
-}
-
-void initSensors()
-{
-  Sensor *temperatureSensor;
-
-  if (USE_BME_SENSOR)
-  {
-    TwoWire *I2CBME = new TwoWire();
-    I2CBME->begin(BME_I2C_SDA, BME_I2C_SCL);
-    // if (!status)
-    // {
-    //   Serial.println("Could not find a valid BME280 sensor, check wiring!");
-    //   return;
-    // }
-
-    Adafruit_BME280 *bme = new Adafruit_BME280();
-    bme->begin(0x76, I2CBME);
-    temperatureSensor = new BME280TemperatureSensor(bme, [](String payload)
-                                                    { mqttHandler->publishTemperature(payload); });
-  }
-  else
-  {
-    // default use DHT11 sensor
-    DHT *dht = new DHT(DHTPIN, DHTTYPE);
-    dht->begin();
-    temperatureSensor = new DHT11TemperatureSensor(dht, [](String payload)
-                                                   { mqttHandler->publishTemperature(payload); });
-  }
-
-  std::list<Sensor *> sensors = {temperatureSensor};
-  sensorHandler = new SensorHandler(sensors);
 }
 
 void onWifiConnect(const WiFiEventStationModeGotIP &event)
