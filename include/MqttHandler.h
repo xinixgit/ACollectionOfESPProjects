@@ -1,10 +1,11 @@
 #ifndef MQTTHANDLER_H
 #define MQTTHANDLER_H
 
+#include <AsyncMqttClient.h>
 #include "Config.h"
 
-typedef std::function<void(const char *)> OnAudioPlayerVolumeChangeRequest;
-typedef std::function<void(const char *)> OnAudioPlayerStateChangeRequest;
+typedef std::function<void(char *, char *, AsyncMqttClientMessageProperties, size_t, size_t, size_t)> OnMessageCallback;
+typedef std::function<void(bool)> OnConnectCallback;
 
 struct MqttHandler
 {
@@ -13,10 +14,10 @@ struct MqttHandler
   MqttHandler(MqttConfig *);
   void connect();
   void disconnect();
-  void publishTemperature(String payload);
-  void publishAudioPlayerState(String payload);
-  void onAudioPlayerVolumeChangeRequest(OnAudioPlayerVolumeChangeRequest callback);
-  void onAudioPlayerStateChangeRequest(OnAudioPlayerStateChangeRequest callback);
+  void subscribe(const char *topic);
+  void publishPayload(const char *topic, const char *payload);
+  void onMessage(OnMessageCallback);
+  void onConnect(OnConnectCallback);
 };
 
 #endif

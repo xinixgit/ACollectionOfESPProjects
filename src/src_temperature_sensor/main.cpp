@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include "Config.h"
 #include "MqttHandler.h"
+#include "CommunicationManager.h"
 #include "SensorHandler.h"
 
 #define TEN_MIN 600000
@@ -11,6 +12,7 @@ Config config;
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 MqttHandler *mqttHandler;
+TemperatureSensorCommunicationManager *communicationManager;
 SensorHandler *sensorHandler;
 
 // functions declaration
@@ -24,8 +26,9 @@ void setup()
   Serial.begin(9600);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
+  communicationManager = new TemperatureSensorCommunicationManager(mqttHandler);
   sensorHandler = new SensorHandler([](String payload)
-                                    { mqttHandler->publishTemperature(payload); });
+                                    { communicationManager->publishTemperature(payload); });
 
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
   wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
