@@ -35,8 +35,7 @@ void setup()
   communicationManager = new SoundPlayerCommunicationManager(mqttHandler);
   audioPlayer = new AudioPlayer();
   sensorHandler = new SensorHandler([](String payload)
-                                    { communicationManager->publishTemperature(payload); },
-                                    BME280Sensor);
+                                    { communicationManager->publishTemperature(payload); });
 
   connectToMqtt();
   delay(500);
@@ -88,17 +87,17 @@ void connectToWifi()
 
 void connectToMqtt()
 {
-  communicationManager->onAudioPlayerVolumeChangeRequest([](const char *payload)
-                                                         { audioPlayer->onVolumeChangeRequested(payload); });
-  communicationManager->onAudioPlayerStateChangeRequest([](const char *payload)
-                                                        { audioPlayer->onStateChangeRequested(payload); });
+  communicationManager->onVolumeChangeRequest([](const char *payload)
+                                              { audioPlayer->onVolumeChangeRequested(payload); });
+  communicationManager->onStateChangeRequest([](const char *payload)
+                                             { audioPlayer->onStateChangeRequested(payload); });
   mqttHandler->connect();
 }
 
 void startAudioPlayer(void *parameter)
 {
   audioPlayer->setPublishStateFn([](String payload)
-                                 { communicationManager->publishAudioPlayerState(payload); });
+                                 { communicationManager->publishState(payload); });
   audioPlayer->play();
   for (;;)
   {

@@ -1,17 +1,35 @@
 #include <AsyncMqttClient.h>
+#include <string.h>
+#include <map>
 #include "MqttHandler.h"
 #include "Config.h"
 
-typedef std::function<void(const char *)> OnAudioPlayerVolumeChangeRequest;
-typedef std::function<void(const char *)> OnAudioPlayerStateChangeRequest;
+typedef std::function<void(const char *)> MessageTriggeredAction;
+
+MessageTriggeredAction onOffAction(MessageTriggeredAction onAction, MessageTriggeredAction offAction)
+{
+  return [onAction, offAction](const char *payload)
+  {
+    if (strcmp(payload, "on") == 0)
+    {
+      onAction(payload);
+    }
+    else if (strcmp(payload, "off") == 0)
+    {
+      offAction(payload);
+    }
+  };
+}
 
 struct CommunicationManager
 {
   MqttHandler *mqttHandler;
+  std::map<const char *, MessageTriggeredAction> messageTriggeredActions;
 
-  CommunicationManager(MqttHandler *mqttHandler)
+  CommunicationManager(MqttHandler *mqttHandler, std::map<const char *, MessageTriggeredAction> messageTriggeredActions = {})
   {
     this->mqttHandler = mqttHandler;
+    this->messageTriggeredActions = messageTriggeredActions;
     this->mqttHandler->onConnect([this](bool sessionPresent)
                                  { this->onConnect(sessionPresent); });
     this->mqttHandler->onMessage([this](char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
@@ -21,18 +39,43 @@ struct CommunicationManager
   virtual void onConnect(bool sessionPresent)
   {
     Serial.println("Connected to MQTT.");
+    if (messageTriggeredActions.size() > 0)
+    {
+      for (auto const &x : messageTriggeredActions)
+      {
+        mqttHandler->subscribe(x.first);
+      }
+    }
   }
 
   virtual void onMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
   {
-    Serial.printf("Received message from MQTT topic %s with payload: %s\n", topic, payload);
+    const char *pl = "";
+    if (len > 0)
+    {
+      std::string str;
+      str.append(payload);
+      pl = str.substr(0, len).c_str();
+    }
+
+    Serial.printf("Received message from MQTT topic %s with payload: %s\n", topic, pl);
+    if (messageTriggeredActions.size() > 0)
+    {
+      for (auto const &x : messageTriggeredActions)
+      {
+        if (strcmp(x.first, topic) == 0)
+        {
+          x.second(pl);
+        }
+      }
+    }
   }
 };
 
 // ------------------------------ TemperatureSensorCommunicationManager ------------------------------
 struct TemperatureSensorCommunicationManager : CommunicationManager
 {
-  TemperatureSensorCommunicationManager(MqttHandler *mqttHandler) : CommunicationManager(mqttHandler)
+  TemperatureSensorCommunicationManager(MqttHandler *mqttHandler, std::map<const char *, MessageTriggeredAction> messageTriggeredActions = {}) : CommunicationManager(mqttHandler, messageTriggeredActions)
   {
   }
 
@@ -45,48 +88,63 @@ struct TemperatureSensorCommunicationManager : CommunicationManager
 // ------------------------------ SoundPlayerCommunicationManager ------------------------------
 struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
 {
-  OnAudioPlayerVolumeChangeRequest audioPlayerVolumeChangeRequestCallback;
-  OnAudioPlayerStateChangeRequest audioPlayerStateChangeRequestCallback;
+  MessageTriggeredAction volumeChangeRequestCallback;
+  MessageTriggeredAction stateChangeRequestCallback;
 
-  SoundPlayerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
-  {
-  }
-  void publishTemperature(String payload)
-  {
-    TemperatureSensorCommunicationManager::publishTemperature(payload);
-  }
-  void publishAudioPlayerState(String payload)
+  SoundPlayerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(
+                                                                  mqttHandler,
+                                                                  std::map<const char *, MessageTriggeredAction>{
+                                                                      {MQTT_TOPIC_AUDIOPLAYER_CHANGE_STATE, [this](const char *payload)
+                                                                       { this->stateChangeRequestCallback(payload); }},
+                                                                      {MQTT_TOPIC_AUDIOPLAYER_CHANGE_VOL, [this](const char *payload)
+                                                                       { this->volumeChangeRequestCallback(payload); }}}) {}
+  void publishState(String payload)
   {
     mqttHandler->publishPayload(MQTT_TOPIC_AUDIOPLAYER_STATE_CHANGED, payload.c_str());
   }
-  void onAudioPlayerVolumeChangeRequest(OnAudioPlayerVolumeChangeRequest callback)
+  void onVolumeChangeRequest(MessageTriggeredAction callback)
   {
-    audioPlayerVolumeChangeRequestCallback = callback;
+    volumeChangeRequestCallback = callback;
   }
-  void onAudioPlayerStateChangeRequest(OnAudioPlayerStateChangeRequest callback)
+  void onStateChangeRequest(MessageTriggeredAction callback)
   {
-    audioPlayerStateChangeRequestCallback = callback;
+    stateChangeRequestCallback = callback;
   }
-  void onConnect(bool sessionPresent)
-  {
-    Serial.println("MQTT client is connected");
-    for (String s : MqttTopicOfSubscription)
-    {
-      const char *topic = s.c_str();
-      mqttHandler->subscribe(topic);
-    }
-  }
-  void onMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
-  {
-    String fixed = ((String)payload).substring(0, len);
+};
 
-    if (strcmp(topic, MQTT_TOPIC_AUDIOPLAYER_CHANGE_STATE) == 0 && audioPlayerStateChangeRequestCallback != NULL)
-    {
-      audioPlayerStateChangeRequestCallback(fixed.c_str());
-    }
-    else if (strcmp(topic, MQTT_TOPIC_AUDIOPLAYER_CHANGE_VOL) == 0 && audioPlayerVolumeChangeRequestCallback != NULL)
-    {
-      audioPlayerVolumeChangeRequestCallback(fixed.c_str());
-    }
+// ------------------------------ SprinklerCommunicationManager ------------------------------
+struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
+{
+  MessageTriggeredAction waterRequestCallback;
+  MessageTriggeredAction scheduledWaterRequestCallback;
+  MessageTriggeredAction pictureRequestCallback;
+  MessageTriggeredAction videoRequestCallback;
+
+  SprinklerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(
+                                                                mqttHandler,
+                                                                std::map<const char *, MessageTriggeredAction>{
+                                                                    {MQTT_TOPIC_SPRINKLER_SCHEDULED_WATER, [this](const char *payload)
+                                                                     { this->scheduledWaterRequestCallback(payload); }},
+                                                                    {MQTT_TOPIC_SPRINKLER_WATER, [this](const char *payload)
+                                                                     { this->waterRequestCallback(payload); }},
+                                                                    {MQTT_TOPIC_SPRINKLER_PICTURE, [this](const char *payload)
+                                                                     { this->pictureRequestCallback(payload); }},
+                                                                    {MQTT_TOPIC_SPRINKLER_VIDEO, [this](const char *payload)
+                                                                     { this->videoRequestCallback(payload); }}}) {}
+  void onScheduledWaterRequest(MessageTriggeredAction callback)
+  {
+    scheduledWaterRequestCallback = callback;
+  }
+  void onWaterRequest(MessageTriggeredAction onWaterTurnedOn, MessageTriggeredAction onWaterTurnedOff)
+  {
+    waterRequestCallback = onOffAction(onWaterTurnedOn, onWaterTurnedOff);
+  }
+  void onPictureRequest(MessageTriggeredAction callback)
+  {
+    pictureRequestCallback = callback;
+  }
+  void onVideoRequest(MessageTriggeredAction onVideoStarted, MessageTriggeredAction onVideoStopped)
+  {
+    videoRequestCallback = onOffAction(onVideoStarted, onVideoStopped);
   }
 };
