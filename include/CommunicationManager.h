@@ -118,7 +118,6 @@ struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
   MessageTriggeredAction waterRequestCallback;
   MessageTriggeredAction scheduledWaterRequestCallback;
   MessageTriggeredAction pictureRequestCallback;
-  MessageTriggeredAction videoRequestCallback;
 
   SprinklerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(
                                                                 mqttHandler,
@@ -128,9 +127,7 @@ struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
                                                                     {MQTT_TOPIC_SPRINKLER_WATER, [this](const char *payload)
                                                                      { this->waterRequestCallback(payload); }},
                                                                     {MQTT_TOPIC_SPRINKLER_PICTURE, [this](const char *payload)
-                                                                     { this->pictureRequestCallback(payload); }},
-                                                                    {MQTT_TOPIC_SPRINKLER_VIDEO, [this](const char *payload)
-                                                                     { this->videoRequestCallback(payload); }}}) {}
+                                                                     { this->pictureRequestCallback(payload); }}}) {}
   void onScheduledWaterRequest(MessageTriggeredAction callback)
   {
     scheduledWaterRequestCallback = callback;
@@ -142,9 +139,5 @@ struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
   void onPictureRequest(MessageTriggeredAction callback)
   {
     pictureRequestCallback = callback;
-  }
-  void onVideoRequest(MessageTriggeredAction onVideoStarted, MessageTriggeredAction onVideoStopped)
-  {
-    videoRequestCallback = onOffAction(onVideoStarted, onVideoStopped);
   }
 };

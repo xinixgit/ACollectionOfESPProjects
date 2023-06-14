@@ -5,10 +5,10 @@
 #include "soc/soc.h"          // Disable brownour problems
 #include "soc/rtc_cntl_reg.h" // Disable brownour problems
 #include "driver/rtc_io.h"
-#include "ESPCameraHandler.h"
+#include "ESPCamHandler.h"
 #include "Config.h"
 
-ESPCameraHandler::ESPCameraHandler()
+ESPCamHandler::ESPCamHandler()
 {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -34,17 +34,17 @@ ESPCameraHandler::ESPCameraHandler()
 
   config.frame_size = FRAMESIZE_UXGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
   config.jpeg_quality = 16;
-  config.fb_count = 8;
+  config.fb_count = 2;
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.grab_mode = CAMERA_GRAB_LATEST;
 
-  // Init Camera
-  esp_err_t err = esp_camera_init(&config);
-  if (err != ESP_OK)
-  {
-    Serial.printf("Camera init failed with error 0x%x", err);
-    return;
-  }
+  this->cam = new OV2640();
+  this->cam->init(config);
+
+  // Cam settings
+  sensor_t *s = esp_camera_sensor_get();
+  s->set_brightness(s, 1);
+  s->set_contrast(s, 1);
+  s->set_saturation(s, 1);
 
   Serial.println("Starting SD Card");
   if (!SD_MMC.begin())
@@ -61,19 +61,11 @@ ESPCameraHandler::ESPCameraHandler()
   }
 }
 
-void ESPCameraHandler::takePic()
+void ESPCamHandler::takePicAndSave()
 {
-  camera_fb_t *fb = NULL;
+  this->cam->run();
 
-  // Take Picture with Camera
-  fb = esp_camera_fb_get();
-  if (!fb)
-  {
-    Serial.println("Camera capture failed");
-    return;
-  }
-
-  int pictureNumber = esp_random();
+  int pictureNumber = random(0, INT_MAX);
   // Path where new picture will be saved in SD Card
   String path = "/img_" + String(pictureNumber) + ".jpg";
 
@@ -87,9 +79,8 @@ void ESPCameraHandler::takePic()
   }
   else
   {
-    file.write(fb->buf, fb->len); // payload (image), payload length
+    file.write(cam->getfb(), cam->getSize()); // payload (image), payload length
     Serial.printf("Saved file at path: %s\n", path.c_str());
   }
   file.close();
-  esp_camera_fb_return(fb);
 }
