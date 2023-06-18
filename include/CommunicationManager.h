@@ -1,12 +1,27 @@
 #include <AsyncMqttClient.h>
-#include <string.h>
+#include <ArduinoJson.h>
+#include <string>
 #include <map>
 #include "MqttHandler.h"
 #include "Config.h"
+#include <vector>
 
-typedef std::function<void(const char *)> MessageTriggeredAction;
+typedef std::function<void(const char *)> MessageTriggeredActionFn;
 
-MessageTriggeredAction onOffAction(MessageTriggeredAction onAction, MessageTriggeredAction offAction)
+struct MessageTriggeredAction
+{
+  const char *topic;
+  MessageTriggeredActionFn fn;
+  uint8_t qos = 0;
+  MessageTriggeredAction(const char *topic, MessageTriggeredActionFn fn, uint8_t qos = 0)
+  {
+    this->topic = topic;
+    this->fn = fn;
+    this->qos = qos;
+  }
+};
+
+MessageTriggeredActionFn onOffAction(MessageTriggeredActionFn onAction, MessageTriggeredActionFn offAction)
 {
   return [onAction, offAction](const char *payload)
   {
@@ -24,9 +39,9 @@ MessageTriggeredAction onOffAction(MessageTriggeredAction onAction, MessageTrigg
 struct CommunicationManager
 {
   MqttHandler *mqttHandler;
-  std::map<const char *, MessageTriggeredAction> messageTriggeredActions;
+  std::vector<MessageTriggeredAction> messageTriggeredActions;
 
-  CommunicationManager(MqttHandler *mqttHandler, std::map<const char *, MessageTriggeredAction> messageTriggeredActions = {})
+  CommunicationManager(MqttHandler *mqttHandler, std::vector<MessageTriggeredAction> messageTriggeredActions = {})
   {
     this->mqttHandler = mqttHandler;
     this->messageTriggeredActions = messageTriggeredActions;
@@ -41,9 +56,9 @@ struct CommunicationManager
     Serial.println("Connected to MQTT.");
     if (messageTriggeredActions.size() > 0)
     {
-      for (auto const &x : messageTriggeredActions)
+      for (auto action : messageTriggeredActions)
       {
-        mqttHandler->subscribe(x.first);
+        mqttHandler->subscribe(action.topic, action.qos);
       }
     }
   }
@@ -61,11 +76,11 @@ struct CommunicationManager
     Serial.printf("Received message from MQTT topic %s with payload: %s\n", topic, pl);
     if (messageTriggeredActions.size() > 0)
     {
-      for (auto const &x : messageTriggeredActions)
+      for (auto action : messageTriggeredActions)
       {
-        if (strcmp(x.first, topic) == 0)
+        if (strcmp(action.topic, topic) == 0)
         {
-          x.second(pl);
+          action.fn(pl);
         }
       }
     }
@@ -75,38 +90,46 @@ struct CommunicationManager
 // ------------------------------ TemperatureSensorCommunicationManager ------------------------------
 struct TemperatureSensorCommunicationManager : CommunicationManager
 {
-  TemperatureSensorCommunicationManager(MqttHandler *mqttHandler, std::map<const char *, MessageTriggeredAction> messageTriggeredActions = {}) : CommunicationManager(mqttHandler, messageTriggeredActions)
+  TemperatureSensorCommunicationManager(MqttHandler *mqttHandler, std::vector<MessageTriggeredAction> messageTriggeredActions = {}) : CommunicationManager(mqttHandler, messageTriggeredActions)
   {
   }
 
-  void publishTemperature(String payload)
+  void publishTemperature(String payload, const char *topic = MQTT_TOPIC_SENSOR_TEMPERATURE)
   {
-    mqttHandler->publishPayload(MQTT_TOPIC_SENSOR_TEMPERATURE, payload.c_str());
+    mqttHandler->publishPayload(topic, payload.c_str());
   }
 };
 
 // ------------------------------ SoundPlayerCommunicationManager ------------------------------
 struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
 {
-  MessageTriggeredAction volumeChangeRequestCallback;
-  MessageTriggeredAction stateChangeRequestCallback;
+  MessageTriggeredActionFn volumeChangeRequestCallback;
+  MessageTriggeredActionFn stateChangeRequestCallback;
 
-  SoundPlayerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(
-                                                                  mqttHandler,
-                                                                  std::map<const char *, MessageTriggeredAction>{
-                                                                      {MQTT_TOPIC_AUDIOPLAYER_CHANGE_STATE, [this](const char *payload)
-                                                                       { this->stateChangeRequestCallback(payload); }},
-                                                                      {MQTT_TOPIC_AUDIOPLAYER_CHANGE_VOL, [this](const char *payload)
-                                                                       { this->volumeChangeRequestCallback(payload); }}}) {}
+  SoundPlayerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
+  {
+    messageTriggeredActions.push_back(
+        MessageTriggeredAction(
+            MQTT_TOPIC_AUDIOPLAYER_CHANGE_STATE,
+            [this](const char *payload)
+            { this->stateChangeRequestCallback(payload); },
+            1));
+    messageTriggeredActions.push_back(
+        MessageTriggeredAction(
+            MQTT_TOPIC_AUDIOPLAYER_CHANGE_VOL,
+            [this](const char *payload)
+            { this->volumeChangeRequestCallback(payload); },
+            1));
+  }
   void publishState(String payload)
   {
     mqttHandler->publishPayload(MQTT_TOPIC_AUDIOPLAYER_STATE_CHANGED, payload.c_str());
   }
-  void onVolumeChangeRequest(MessageTriggeredAction callback)
+  void onVolumeChangeRequest(MessageTriggeredActionFn callback)
   {
     volumeChangeRequestCallback = callback;
   }
-  void onStateChangeRequest(MessageTriggeredAction callback)
+  void onStateChangeRequest(MessageTriggeredActionFn callback)
   {
     stateChangeRequestCallback = callback;
   }
@@ -115,29 +138,31 @@ struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
 // ------------------------------ SprinklerCommunicationManager ------------------------------
 struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
 {
-  MessageTriggeredAction waterRequestCallback;
-  MessageTriggeredAction scheduledWaterRequestCallback;
-  MessageTriggeredAction pictureRequestCallback;
+  MessageTriggeredActionFn waterRequestCallback;
+  SprinkerConfig *config;
 
-  SprinklerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(
-                                                                mqttHandler,
-                                                                std::map<const char *, MessageTriggeredAction>{
-                                                                    {MQTT_TOPIC_SPRINKLER_SCHEDULED_WATER, [this](const char *payload)
-                                                                     { this->scheduledWaterRequestCallback(payload); }},
-                                                                    {MQTT_TOPIC_SPRINKLER_WATER, [this](const char *payload)
-                                                                     { this->waterRequestCallback(payload); }},
-                                                                    {MQTT_TOPIC_SPRINKLER_PICTURE, [this](const char *payload)
-                                                                     { this->pictureRequestCallback(payload); }}}) {}
-  void onScheduledWaterRequest(MessageTriggeredAction callback)
+  SprinklerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
   {
-    scheduledWaterRequestCallback = callback;
+    config = new SprinkerConfig();
+    messageTriggeredActions.push_back(
+        MessageTriggeredAction(
+            config->MqttTopicWater,
+            [this](const char *payload)
+            { this->waterRequestCallback(payload); },
+            1));
   }
-  void onWaterRequest(MessageTriggeredAction onWaterTurnedOn, MessageTriggeredAction onWaterTurnedOff)
+  void onWaterRequest(MessageTriggeredActionFn onWaterTurnedOn, MessageTriggeredActionFn onWaterTurnedOff)
   {
     waterRequestCallback = onOffAction(onWaterTurnedOn, onWaterTurnedOff);
   }
-  void onPictureRequest(MessageTriggeredAction callback)
+  void publishState(const char *item, const char *state)
   {
-    pictureRequestCallback = callback;
+    DynamicJsonDocument doc(64);
+    doc["item"] = item;
+    doc["state"] = state;
+    String payload;
+    serializeJson(doc, payload);
+
+    mqttHandler->publishPayload(config->MqttTopicStateChanged, payload.c_str());
   }
 };

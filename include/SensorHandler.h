@@ -13,6 +13,14 @@ enum TemperatureSensorType
   BME280Sensor
 };
 
+struct TemperatureSensorPinConfig
+{
+  TemperatureSensorType type = DHT11Sensor;
+  uint16_t DHTPin = DHTPIN;
+  uint16_t SCLPin = BME_I2C_SCL;
+  uint16_t SDAPin = BME_I2C_SDA;
+};
+
 struct Sensor
 {
   PublishFn publishFn;
@@ -101,14 +109,17 @@ struct BME280TemperatureSensor : TemperatureSensor
   }
 };
 
-TemperatureSensor *initTemperatureSensor(TemperatureSensorType sensorType, PublishFn publishFn)
+TemperatureSensor *initTemperatureSensor(
+    TemperatureSensorType sensorType,
+    PublishFn publishFn,
+    TemperatureSensorPinConfig pinConfig)
 {
   TemperatureSensor *temperatureSensor = nullptr;
   switch (sensorType)
   {
   case DHT11Sensor:
   {
-    DHT *dht = new DHT(DHTPIN, DHTTYPE);
+    DHT *dht = new DHT(pinConfig.DHTPin, DHT11);
     dht->begin();
     temperatureSensor = new DHT11TemperatureSensor(dht, publishFn);
     break;
@@ -118,10 +129,10 @@ TemperatureSensor *initTemperatureSensor(TemperatureSensorType sensorType, Publi
     TwoWire *I2CBME;
 #ifdef ESP8266
     I2CBME = new TwoWire();
-    I2CBME->begin(BME_I2C_SDA, BME_I2C_SCL);
+    I2CBME->begin(pinConfig.SDAPin, pinConfig.SCLPin);
 #elif defined(ESP32)
     I2CBME = new TwoWire(0);
-    bool status = I2CBME->begin(BME_I2C_SDA, BME_I2C_SCL);
+    bool status = I2CBME->begin(pinConfig.SDAPin, pinConfig.SCLPin);
     if (!status)
     {
       Serial.println("Could not find a valid BME280 sensor, check wiring!");
@@ -151,9 +162,16 @@ struct SensorHandler
     this->sensors = sensors;
   };
 
-  SensorHandler(PublishFn publishFn, TemperatureSensorType temperatureSensorType = DHT11Sensor)
+  SensorHandler(
+      PublishFn publishFn,
+      TemperatureSensorType temperatureSensorType = DHT11Sensor,
+      TemperatureSensorPinConfig pinConfig = TemperatureSensorPinConfig())
   {
-    auto temperatureSensor = initTemperatureSensor(temperatureSensorType, publishFn);
+    auto temperatureSensor = initTemperatureSensor(
+        temperatureSensorType,
+        publishFn,
+        pinConfig);
+
     if (temperatureSensor != nullptr)
     {
       this->sensors.push_back(temperatureSensor);

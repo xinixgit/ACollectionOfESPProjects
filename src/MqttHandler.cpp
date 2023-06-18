@@ -12,6 +12,7 @@ MqttHandler::MqttHandler(MqttConfig *config)
 {
   this->config = config;
 
+  mqttClient.setCleanSession(this->config->cleanSession);
   mqttClient.setServer(this->config->host, this->config->port);
   mqttClient.setCredentials(this->config->username.c_str(), this->config->password.c_str());
   mqttClient.onDisconnect(onDisconnect);
@@ -30,10 +31,10 @@ void MqttHandler::disconnect()
   mqttClient.disconnect();
 }
 
-void MqttHandler::subscribe(const char *topic)
+void MqttHandler::subscribe(const char *topic, uint8_t qos)
 {
-  mqttClient.subscribe(topic, 0);
-  Serial.printf("Subscribed to topic %s\n", topic);
+  mqttClient.subscribe(topic, qos);
+  Serial.printf("Subscribed to topic %s with qos %d\n", topic, qos);
 }
 
 void MqttHandler::onConnect(OnConnectCallback onConnectCallback)
@@ -46,7 +47,7 @@ void MqttHandler::onMessage(OnMessageCallback onMessageCallback)
   mqttClient.onMessage(onMessageCallback);
 }
 
-void MqttHandler::publishPayload(const char *topic, const char *payload)
+void MqttHandler::publishPayload(const char *topic, const char *payload, bool retain)
 {
   if (!mqttClient.connected())
   {
@@ -54,7 +55,7 @@ void MqttHandler::publishPayload(const char *topic, const char *payload)
     return;
   }
 
-  mqttClient.publish(topic, 0, false, payload);
+  mqttClient.publish(topic, 0, retain, payload);
   Serial.printf("Payload published to topic %s: %s\n", topic, payload);
 }
 
