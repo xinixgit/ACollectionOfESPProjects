@@ -5,6 +5,7 @@
 #include "MqttHandler.h"
 #include "CommunicationManager.h"
 #include "SensorHandler.h"
+#include "I2CAddressScanner.h"
 
 #define TEN_MIN 600000
 
@@ -27,8 +28,7 @@ void setup()
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
   communicationManager = new TemperatureSensorCommunicationManager(mqttHandler);
-  sensorHandler = new SensorHandler([](String payload)
-                                    { communicationManager->publishTemperature(payload); });
+  initSensors();
 
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
   wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
@@ -79,4 +79,14 @@ void onWifiConnect(const WiFiEventStationModeGotIP &event)
 void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
 {
   Serial.println("Disconnected from Wi-Fi.");
+}
+
+void initSensors()
+{
+  TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
+                                                                     { communicationManager->publishTemperature(payload); });
+  tempSensorConfig.type = AHT21;
+  AirQualitySensorConfig aqiSensorConfig = AirQualitySensorConfig([](String payload)
+                                                                  { communicationManager->publishAQI(payload); });
+  sensorHandler = new SensorHandler(tempSensorConfig, aqiSensorConfig);
 }

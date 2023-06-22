@@ -21,7 +21,7 @@ MqttHandler::MqttHandler(MqttConfig *config)
 
 void MqttHandler::connect()
 {
-  Serial.println("Connecting to MQTT...");
+  Serial.printf("Connecting to MQTT with id %s...\n", mqttClient.getClientId());
   mqttClient.connect();
 }
 

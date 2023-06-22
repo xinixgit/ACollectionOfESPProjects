@@ -13,11 +13,13 @@ MqttHandler *mqttHandler;
 SprinklerCommunicationManager *communicationManager;
 SensorHandler *sensorHandler;
 bool isWatering = false;
+int waterDurationInMs = 0;
 
 // functions declaration
 void connectToWifi();
 void initSensorHandler();
 void initCommunicationManager();
+void turnOffWater();
 
 void setup()
 {
@@ -29,9 +31,9 @@ void setup()
   connectToWifi();
   delay(500);
 
-  MqttConfig mqttConfig = config.mqtt_config;
-  mqttConfig.cleanSession = false;
-  mqttHandler = new MqttHandler(&config.mqtt_config);
+  MqttConfig *mqttConfig = &config.mqtt_config;
+  mqttConfig->cleanSession = false;
+  mqttHandler = new MqttHandler(mqttConfig);
 
   initSensorHandler();
   initCommunicationManager();
@@ -39,22 +41,28 @@ void setup()
   mqttHandler->connect();
   delay(500);
 
-  // sensorHandler->publishAll();
+  sensorHandler->publishAll();
 
   communicationManager->publishState("esp_board", "on");
 
-  while (isWatering)
-  {
-    delay(500);
-  }
-
-  // leave 10s for program upload and watering
+  // leave 10s for program upload and watering requests
   delay(10000);
+
+  if (isWatering && waterDurationInMs > 0)
+  {
+    while (waterDurationInMs > 0)
+    {
+      delay(500);
+      waterDurationInMs -= 500;
+    }
+
+    turnOffWater();
+  }
 
   communicationManager->publishState("esp_board", "off");
   delay(1000);
 
-  ESP.deepSleep(50000000);
+  ESP.deepSleep(TEN_MIN_IN_US);
 }
 
 void loop()
@@ -79,26 +87,35 @@ void connectToWifi()
   Serial.println("");
 }
 
-void onWaterOnRequest(const char *payload)
+void turnOnWater()
 {
-  isWatering = true;
-  digitalWrite(spConfig.WaterPumpPin, HIGH);
-  Serial.println("Sprinkler started watering.");
-  communicationManager->publishState("water_pump", "on");
+  if (!isWatering)
+  {
+    isWatering = true;
+    digitalWrite(spConfig.WaterPumpPin, HIGH);
+    Serial.println("Sprinkler started watering.");
+    communicationManager->publishState("water_pump", "on");
+  }
 }
 
-void onWaterOffRequest(const char *payload)
+void turnOffWater()
 {
+  isWatering = false;
   digitalWrite(spConfig.WaterPumpPin, LOW);
   Serial.println("Sprinkler stopped watering.");
   communicationManager->publishState("water_pump", "off");
-  isWatering = false;
+}
+
+void onWaterRequest(const char *payload)
+{
+  waterDurationInMs = std::stoi(payload) * 1000;
+  turnOnWater();
 }
 
 void initCommunicationManager()
 {
   communicationManager = new SprinklerCommunicationManager(mqttHandler);
-  communicationManager->onWaterRequest(onWaterOnRequest, onWaterOffRequest);
+  communicationManager->onWaterRequest(onWaterRequest);
   Serial.println("Communication manager initiated.");
 }
 

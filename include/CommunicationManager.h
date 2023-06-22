@@ -98,6 +98,10 @@ struct TemperatureSensorCommunicationManager : CommunicationManager
   {
     mqttHandler->publishPayload(topic, payload.c_str());
   }
+  void publishAQI(String payload, const char *topic = MQTT_TOPIC_SENSOR_AQI)
+  {
+    mqttHandler->publishPayload(topic, payload.c_str());
+  }
 };
 
 // ------------------------------ SoundPlayerCommunicationManager ------------------------------
@@ -151,9 +155,9 @@ struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
             { this->waterRequestCallback(payload); },
             1));
   }
-  void onWaterRequest(MessageTriggeredActionFn onWaterTurnedOn, MessageTriggeredActionFn onWaterTurnedOff)
+  void onWaterRequest(MessageTriggeredActionFn callback)
   {
-    waterRequestCallback = onOffAction(onWaterTurnedOn, onWaterTurnedOff);
+    waterRequestCallback = callback;
   }
   void publishState(const char *item, const char *state)
   {
