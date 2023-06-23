@@ -11,6 +11,7 @@ Config config;
 SprinkerConfig spConfig;
 MqttHandler *mqttHandler;
 SprinklerCommunicationManager *communicationManager;
+TemperatureSensor *sysTempSensor;
 SensorHandler *sensorHandler;
 bool isWatering = false;
 int waterDurationInMs = 0;
@@ -57,6 +58,17 @@ void setup()
     }
 
     turnOffWater();
+  }
+
+  // if temperature gets too high, turn fan on for 30s
+  if (sysTempSensor->readTemperatureF() > 90.0)
+  {
+    communicationManager->publishState("fan", "on");
+    digitalWrite(spConfig.FanPin, HIGH);
+    delay(30000);
+    digitalWrite(spConfig.FanPin, LOW);
+    communicationManager->publishState("fan", "off");
+    delay(500);
   }
 
   communicationManager->publishState("esp_board", "off");
@@ -121,14 +133,15 @@ void initCommunicationManager()
 
 void initSensorHandler()
 {
-  TemperatureSensorPinConfig pinConfig = TemperatureSensorPinConfig();
-  pinConfig.SCLPin = spConfig.BMESCLPin;
-  pinConfig.SDAPin = spConfig.BMESDAPin;
-  sensorHandler = new SensorHandler(
-      [](String payload)
-      { communicationManager->publishTemperature(payload, spConfig.MqttTopicSensorTemperature); },
-      BME280Sensor,
-      pinConfig);
+  TemperatureSensorConfig sensorConfig = TemperatureSensorConfig([](String payload)
+                                                                 { communicationManager->publishTemperature(payload, spConfig.MqttTopicSensorTemperature); });
 
+  sensorConfig.type = BME280Sensor;
+  sensorConfig.SCLPin = spConfig.BMESCLPin;
+  sensorConfig.SDAPin = spConfig.BMESDAPin;
+  TemperatureSensor *tempSensor = initTemperatureSensor(sensorConfig);
+  sysTempSensor = tempSensor;
+
+  sensorHandler = new SensorHandler(std::list<Sensor *>{tempSensor});
   Serial.println("Sensor handler initiated.");
 }

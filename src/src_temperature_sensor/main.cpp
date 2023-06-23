@@ -14,6 +14,7 @@ WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 MqttHandler *mqttHandler;
 TemperatureSensorCommunicationManager *communicationManager;
+TemperatureSensor *sysTempSensor;
 SensorHandler *sensorHandler;
 
 // functions declaration
@@ -86,7 +87,13 @@ void initSensors()
   TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
                                                                      { communicationManager->publishTemperature(payload); });
   tempSensorConfig.type = AHT21;
+  TemperatureSensor *tempSensor = initTemperatureSensor(tempSensorConfig);
+  sysTempSensor = tempSensor;
+
   AirQualitySensorConfig aqiSensorConfig = AirQualitySensorConfig([](String payload)
                                                                   { communicationManager->publishAQI(payload); });
-  sensorHandler = new SensorHandler(tempSensorConfig, aqiSensorConfig);
+  aqiSensorConfig.nominalTemperature = tempSensor->readTemperature();
+  aqiSensorConfig.nominalHumidity = tempSensor->readHumidity();
+  AirQualitySensor *aqiSensor = initAirQualitySensor(aqiSensorConfig);
+  sensorHandler = new SensorHandler(std::list<Sensor *>{tempSensor, aqiSensor});
 }

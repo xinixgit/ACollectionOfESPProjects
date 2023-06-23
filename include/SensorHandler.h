@@ -51,6 +51,8 @@ struct AirQualitySensorConfig
   AirQualitySensorType type;
   uint16_t SCLPin;
   uint16_t SDAPin;
+  float nominalTemperature;
+  float nominalHumidity;
 
   AirQualitySensorConfig()
   {
@@ -61,12 +63,16 @@ struct AirQualitySensorConfig
       PublishFn publishFn,
       AirQualitySensorType type = ENS160,
       uint16_t SCLPin = SCL, // default SCL on a ESP8266 is 5
-      uint16_t SDAPin = SDA) // default SDA on a ESP8266 is 4
+      uint16_t SDAPin = SDA, // default SDA on a ESP8266 is 4
+      float nominalTemperature = 22.78,
+      float nominalHumidity = 42)
   {
     this->publishFn = publishFn;
     this->type = type;
     this->SCLPin = SCLPin;
     this->SDAPin = SDAPin;
+    this->nominalTemperature = nominalTemperature;
+    this->nominalHumidity = nominalHumidity;
   }
 };
 
@@ -87,7 +93,9 @@ struct TemperatureSensor : Sensor
   {
   }
 
-  virtual float readTemperatureF() { return 0; };
+  virtual float readTemperature() { return 0; }
+
+  virtual float readTemperatureF() { return readTemperature() * 1.8 + 32; };
 
   virtual float readHumidity() { return 0; };
 
@@ -117,9 +125,9 @@ struct DHT11TemperatureSensor : TemperatureSensor
     this->dht = dht;
   }
 
-  float readTemperatureF()
+  float readTemperature()
   {
-    return this->dht->readTemperature(true);
+    return this->dht->readTemperature(false);
   }
 
   float readHumidity()
@@ -137,9 +145,9 @@ struct BME280TemperatureSensor : TemperatureSensor
     this->bme = bme;
   }
 
-  float readTemperatureF()
+  float readTemperature()
   {
-    return this->bme->readTemperature() * 1.8 + 32;
+    return this->bme->readTemperature();
   }
 
   float readHumidity()
@@ -166,11 +174,11 @@ struct AHT21Sensor : TemperatureSensor
     this->aht = aht;
   }
 
-  float readTemperatureF()
+  float readTemperature()
   {
     sensors_event_t temperature;
     this->aht->getEvent(nullptr, &temperature);
-    return temperature.temperature * 1.8 + 32;
+    return temperature.temperature;
   }
 
   float readHumidity()
@@ -286,9 +294,9 @@ struct AirQualitySensor : Sensor
 
 struct ENS160Sensor : AirQualitySensor
 {
-  DFRobot_ENS160_I2C *sensor;
+  DFRobot_ENS160 *sensor;
 
-  ENS160Sensor(DFRobot_ENS160_I2C *sensor, PublishFn publishFn) : AirQualitySensor(publishFn)
+  ENS160Sensor(DFRobot_ENS160 *sensor, PublishFn publishFn) : AirQualitySensor(publishFn)
   {
     this->sensor = sensor;
   }
@@ -350,7 +358,9 @@ AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig config)
       return nullptr;
     }
     ens160->setPWRMode(ENS160_STANDARD_MODE);
-    ens160->setTempAndHum(22.78, 42);
+    ens160->setTempAndHum(config.nominalTemperature, config.nominalHumidity);
+    Serial.printf("ENS160 operational status is: %d\n", ens160->getENS160Status());
+
     return new ENS160Sensor(ens160, config.publishFn);
   }
   default:
