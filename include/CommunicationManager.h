@@ -1,3 +1,6 @@
+#ifndef COMMUNICATIONMANAGER_H
+#define COMMUNICATIONMANAGER_H
+
 #include <AsyncMqttClient.h>
 #include <ArduinoJson.h>
 #include <string>
@@ -170,3 +173,5 @@ struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
     mqttHandler->publishPayload(config->MqttTopicStateChanged, payload.c_str());
   }
 };
+
+#endif

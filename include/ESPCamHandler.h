@@ -2,7 +2,7 @@
 #define ESPCAMHANDLER_H
 
 #include "String"
-#include "OV2640.h"
+#include <OV2640.h>
 
 #define PWDN_GPIO_NUM 32
 #define RESET_GPIO_NUM -1
@@ -22,7 +22,7 @@
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
 
-// Holds access to the OV2640Cam and the SD card reader on a ESP32-CAM board
+// Holds access to the camera and the SD card reader on a ESP32-CAM board
 struct ESPCamHandler
 {
   OV2640 *cam;

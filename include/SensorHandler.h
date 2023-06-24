@@ -1,3 +1,6 @@
+#ifndef SENSORHANDLER_H
+#define SENSORHANDLER_H
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
@@ -347,7 +350,7 @@ AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig config)
     if (!status)
     {
       Serial.println("Could not find a valid ENS160 sensor, check wiring!");
-      break;
+      return nullptr;
     }
 #endif
 
@@ -403,3 +406,5 @@ struct SensorHandler
     }
   }
 };
+
+#endif

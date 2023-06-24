@@ -1,3 +1,6 @@
+#ifndef WEBSTREAMER_H
+#define WEBSTREAMER_H
+
 #include <WebServer.h>
 #include "ESPCamHandler.h"
 
@@ -5,10 +8,6 @@ namespace audp
 {
   struct WebStreamer
   {
-    // WiFiServer *rtspServer;
-    // CStreamer *streamer;
-    // WiFiClient rtspClient;
-
     WebServer *server;
     ESPCamHandler *camHandler;
 
@@ -17,3 +16,5 @@ namespace audp
     void loop();
   };
 }
+
+#endif

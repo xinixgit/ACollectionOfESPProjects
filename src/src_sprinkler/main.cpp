@@ -58,6 +58,7 @@ void setup()
     }
 
     turnOffWater();
+    delay(500);
   }
 
   // if temperature gets too high, turn fan on for 30s
@@ -72,7 +73,7 @@ void setup()
   }
 
   communicationManager->publishState("esp_board", "off");
-  delay(1000);
+  delay(500);
 
   ESP.deepSleep(TEN_MIN_IN_US);
 }

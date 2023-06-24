@@ -32,7 +32,7 @@ ESPCamHandler::ESPCamHandler()
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
 
-  config.frame_size = FRAMESIZE_UXGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
+  config.frame_size = FRAMESIZE_SXGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
   config.jpeg_quality = 16;
   config.fb_count = 2;
   config.fb_location = CAMERA_FB_IN_PSRAM;
@@ -41,7 +41,7 @@ ESPCamHandler::ESPCamHandler()
   this->cam->init(config);
 
   // Cam settings
-  sensor_t *s = esp_camera_sensor_get();
+  sensor_t1 *s = esp_camera_sensor_get();
   s->set_brightness(s, 1);
   s->set_contrast(s, 1);
   s->set_saturation(s, 1);
