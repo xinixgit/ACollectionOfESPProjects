@@ -6,7 +6,7 @@
 #include <Wire.h>
 #include <Adafruit_BME280.h>
 #include <Adafruit_AHTX0.h>
-#include <DFRobot_ENS160.h>
+#include <ScioSense_ENS160.h>
 #include <DHT.h>
 #include <list>
 
@@ -54,8 +54,6 @@ struct AirQualitySensorConfig
   AirQualitySensorType type;
   uint16_t SCLPin;
   uint16_t SDAPin;
-  float nominalTemperature;
-  float nominalHumidity;
 
   AirQualitySensorConfig()
   {
@@ -66,16 +64,12 @@ struct AirQualitySensorConfig
       PublishFn publishFn,
       AirQualitySensorType type = ENS160,
       uint16_t SCLPin = SCL, // default SCL on a ESP8266 is 5
-      uint16_t SDAPin = SDA, // default SDA on a ESP8266 is 4
-      float nominalTemperature = 22.78,
-      float nominalHumidity = 42)
+      uint16_t SDAPin = SDA) // default SDA on a ESP8266 is 4)
   {
     this->publishFn = publishFn;
     this->type = type;
     this->SCLPin = SCLPin;
     this->SDAPin = SDAPin;
-    this->nominalTemperature = nominalTemperature;
-    this->nominalHumidity = nominalHumidity;
   }
 };
 
@@ -266,13 +260,13 @@ struct AirQualitySensor : Sensor
    * Get the air quality index
    * Return value: 1-Excellent, 2-Good, 3-Moderate, 4-Poor, 5-Unhealthy
    */
-  virtual uint8_t getAQI() { return 0; };
+  virtual uint8_t getAQI() { return -1; };
 
   /**
    * Get TVOC concentration
    * Return value range: 0–65000, unit: ppb
    */
-  virtual uint16_t getTVOC() { return 0; };
+  virtual uint16_t getTVOC() { return -1; };
 
   /**
    * Get CO2 equivalent concentration calculated according to the detected data of VOCs and hydrogen (eCO2 – Equivalent CO2)
@@ -280,9 +274,9 @@ struct AirQualitySensor : Sensor
    * Five levels: Excellent(400 - 600), Good(600 - 800), Moderate(800 - 1000),
    *               Poor(1000 - 1500), Unhealthy(> 1500)
    */
-  virtual uint16_t getECO2() { return 0; };
+  virtual uint16_t getECO2() { return -1; };
 
-  String createPayload()
+  virtual String createPayload()
   {
     DynamicJsonDocument doc(64);
     doc["aqi"] = this->getAQI();
@@ -297,11 +291,18 @@ struct AirQualitySensor : Sensor
 
 struct ENS160Sensor : AirQualitySensor
 {
-  DFRobot_ENS160 *sensor;
+  ScioSense_ENS160 *sensor;
 
-  ENS160Sensor(DFRobot_ENS160 *sensor, PublishFn publishFn) : AirQualitySensor(publishFn)
+  ENS160Sensor(ScioSense_ENS160 *sensor, PublishFn publishFn) : AirQualitySensor(publishFn)
   {
     this->sensor = sensor;
+  }
+
+  String createPayload()
+  {
+    sensor->measure(true);
+    sensor->measureRaw(true);
+    return AirQualitySensor::createPayload();
   }
 
   uint8_t getAQI()
@@ -326,7 +327,7 @@ struct ENS160Sensor : AirQualitySensor
    */
   uint16_t getECO2()
   {
-    return this->sensor->getECO2();
+    return this->sensor->geteCO2();
   };
 };
 
@@ -340,29 +341,21 @@ AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig config)
   }
   case ENS160:
   {
-    TwoWire *wire;
-#ifdef ESP8266
-    wire = new TwoWire();
-    wire->begin(config.SDAPin, config.SCLPin);
-#elif defined(ESP32)
-    wire = new TwoWire(0);
-    bool status = wire->begin(config.SDAPin, config.SCLPin);
-    if (!status)
-    {
-      Serial.println("Could not find a valid ENS160 sensor, check wiring!");
-      return nullptr;
-    }
-#endif
+    ScioSense_ENS160 *ens160 = new ScioSense_ENS160(ENS160_I2CADDR_1);
+    ens160->setI2C(config.SDAPin, config.SCLPin);
+    ens160->begin();
 
-    DFRobot_ENS160_I2C *ens160 = new DFRobot_ENS160_I2C(wire, 0x53);
-    if (NO_ERR != ens160->begin())
+    if (!ens160->available())
     {
-      Serial.println("Unable to start ENS160 sensor");
+      Serial.println("Unable to initiatiate ENS160 sensor");
       return nullptr;
     }
-    ens160->setPWRMode(ENS160_STANDARD_MODE);
-    ens160->setTempAndHum(config.nominalTemperature, config.nominalHumidity);
-    Serial.printf("ENS160 operational status is: %d\n", ens160->getENS160Status());
+
+    if (!ens160->setMode(ENS160_OPMODE_STD))
+    {
+      Serial.println("Unable to set ENS160 to standard mode.");
+      return nullptr;
+    }
 
     return new ENS160Sensor(ens160, config.publishFn);
   }

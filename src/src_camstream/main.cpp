@@ -23,13 +23,13 @@ bool setupComplete = false;
 void blinkLED(void *parameter);
 void startWebStream(void *parameter);
 void connectToWifi();
-void initCommunicationManager();
 void initSensorHandler();
 
 void setup()
 {
-  Serial.begin(9600);
   pinMode(camConfig.LEDPin, OUTPUT);
+  pinMode(camConfig.SCLPin, INPUT);
+  pinMode(camConfig.SDAPin, INPUT);
 
   xTaskCreate(
       blinkLED,
@@ -45,20 +45,24 @@ void setup()
   camHandler = new ESPCamHandler();
   webStreamer = new audp::WebStreamer(camHandler);
 
-  xTaskCreate(
+  xTaskCreatePinnedToCore(
       startWebStream,
       "Start web stream",
       4096,
       NULL,
       4,
-      NULL);
+      NULL,
+      0);
   delay(500);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
-  communicationManager = new TemperatureSensorCommunicationManager(mqttHandler);
-  initSensorHandler();
-
   mqttHandler->connect();
+  delay(500);
+
+  communicationManager = new TemperatureSensorCommunicationManager(mqttHandler);
+  delay(500);
+
+  initSensorHandler();
   delay(500);
 
   setupComplete = true;
@@ -66,29 +70,23 @@ void setup()
 
 void loop()
 {
+  sensorHandler->publishAll();
+  delay(TEN_MIN);
 }
 
 void connectToWifi()
 {
   WiFi.mode(WIFI_STA);
-  Serial.print("Connecting to Wi-Fi network ");
   WiFi.begin(config.wifi_ssid.c_str(), config.wifi_password.c_str());
 
   while (WiFi.status() != WL_CONNECTED)
   {
-    Serial.print(".");
     delay(1000);
   }
-
-  Serial.println("WiFi connected");
-  Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-  Serial.printf("Mac address: %s\n", WiFi.macAddress().c_str());
-  Serial.println("");
 }
 
 void onPictureRequest(const char *payload)
 {
-  Serial.println("Picture request received.");
   camHandler->takePicAndSave();
 }
 
@@ -121,10 +119,10 @@ void startWebStream(void *parameter)
 void initSensorHandler()
 {
   TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
-                                                                     { communicationManager->publishTemperature(payload); });
+                                                                     { communicationManager->publishTemperature(payload, camConfig.MqttTopicSensorTemperature); });
   tempSensorConfig.type = BME280Sensor;
   tempSensorConfig.SCLPin = camConfig.SCLPin;
-  tempSensorConfig.SDAPin = tempSensorConfig.SDAPin;
+  tempSensorConfig.SDAPin = camConfig.SDAPin;
   TemperatureSensor *tempSensor = initTemperatureSensor(tempSensorConfig);
   sensorHandler = new SensorHandler(std::list<Sensor *>{tempSensor});
 }
