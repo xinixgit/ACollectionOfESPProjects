@@ -146,6 +146,7 @@ struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
 struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
 {
   MessageTriggeredActionFn waterRequestCallback;
+  MessageTriggeredActionFn fanRequestCallback;
   SprinkerConfig *config;
 
   SprinklerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
@@ -157,10 +158,20 @@ struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
             [this](const char *payload)
             { this->waterRequestCallback(payload); },
             1));
+    messageTriggeredActions.push_back(
+        MessageTriggeredAction(
+            config->MqttTopicFan,
+            [this](const char *payload)
+            { this->fanRequestCallback(payload); },
+            1));
   }
   void onWaterRequest(MessageTriggeredActionFn callback)
   {
     waterRequestCallback = callback;
+  }
+  void onFanRequest(MessageTriggeredActionFn callback)
+  {
+    fanRequestCallback = callback;
   }
   void publishState(const char *item, const char *state)
   {

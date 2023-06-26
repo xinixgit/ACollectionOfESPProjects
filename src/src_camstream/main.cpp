@@ -123,6 +123,5 @@ void initSensorHandler()
   tempSensorConfig.type = BME280Sensor;
   tempSensorConfig.SCLPin = camConfig.SCLPin;
   tempSensorConfig.SDAPin = camConfig.SDAPin;
-  TemperatureSensor *tempSensor = initTemperatureSensor(tempSensorConfig);
-  sensorHandler = new SensorHandler(std::list<Sensor *>{tempSensor});
+  sensorHandler = new SensorHandler(tempSensorConfig);
 }

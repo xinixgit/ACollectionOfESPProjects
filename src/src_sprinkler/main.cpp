@@ -11,23 +11,26 @@ Config config;
 SprinkerConfig spConfig;
 MqttHandler *mqttHandler;
 SprinklerCommunicationManager *communicationManager;
-TemperatureSensor *sysTempSensor;
 SensorHandler *sensorHandler;
-bool isWatering = false;
-int waterDurationInMs = 0;
+bool doWater = false;
+int waterOnDurationInMs = 0;
+bool doFan = false;
+int fanOnDurationInMs = 0;
 
 // functions declaration
 void connectToWifi();
 void initSensorHandler();
 void initCommunicationManager();
+void turnOnWater();
 void turnOffWater();
+void turnOnFan();
+void turnOffFan();
 
 void setup()
 {
   Serial.begin(9600);
   pinMode(spConfig.WaterPumpPin, OUTPUT);
   pinMode(spConfig.FanPin, OUTPUT);
-  pinMode(spConfig.AdhocWaterPin, INPUT);
 
   connectToWifi();
   delay(500);
@@ -49,27 +52,30 @@ void setup()
   // leave 10s for program upload and watering requests
   delay(10000);
 
-  if (isWatering && waterDurationInMs > 0)
+  // turn water on based on for requested duration
+  if (doWater && waterOnDurationInMs > 0)
   {
-    while (waterDurationInMs > 0)
+    turnOnWater();
+    while (waterOnDurationInMs > 0)
     {
       delay(500);
-      waterDurationInMs -= 500;
+      waterOnDurationInMs -= 500;
     }
-
     turnOffWater();
-    delay(500);
+    doWater = false;
   }
 
-  // if temperature gets too high, turn fan on for 30s
-  if (sysTempSensor->readTemperatureF() > 90.0)
+  // turn fan on based on temperature (detected in HA)
+  if (doFan && fanOnDurationInMs > 0)
   {
-    communicationManager->publishState("fan", "on");
-    digitalWrite(spConfig.FanPin, HIGH);
-    delay(30000);
-    digitalWrite(spConfig.FanPin, LOW);
-    communicationManager->publishState("fan", "off");
-    delay(500);
+    turnOnFan();
+    while (fanOnDurationInMs > 0)
+    {
+      delay(500);
+      fanOnDurationInMs -= 500;
+    }
+    turnOffFan();
+    doFan = false;
   }
 
   communicationManager->publishState("esp_board", "off");
@@ -100,36 +106,51 @@ void connectToWifi()
   Serial.println("");
 }
 
+void turnOnFan()
+{
+  digitalWrite(spConfig.FanPin, HIGH);
+  communicationManager->publishState("fan", "on");
+  delay(500);
+}
+
+void turnOffFan()
+{
+  digitalWrite(spConfig.FanPin, LOW);
+  communicationManager->publishState("fan", "off");
+  delay(500);
+}
+
+void onFanRequest(const char *payload)
+{
+  doFan = true;
+  fanOnDurationInMs = std::stoi(payload) * 1000;
+}
+
 void turnOnWater()
 {
-  if (!isWatering)
-  {
-    isWatering = true;
-    digitalWrite(spConfig.WaterPumpPin, HIGH);
-    Serial.println("Sprinkler started watering.");
-    communicationManager->publishState("water_pump", "on");
-  }
+  digitalWrite(spConfig.WaterPumpPin, HIGH);
+  communicationManager->publishState("water_pump", "on");
+  delay(500);
 }
 
 void turnOffWater()
 {
-  isWatering = false;
   digitalWrite(spConfig.WaterPumpPin, LOW);
-  Serial.println("Sprinkler stopped watering.");
   communicationManager->publishState("water_pump", "off");
+  delay(500);
 }
 
 void onWaterRequest(const char *payload)
 {
-  waterDurationInMs = std::stoi(payload) * 1000;
-  turnOnWater();
+  doWater = true;
+  waterOnDurationInMs = std::stoi(payload) * 1000;
 }
 
 void initCommunicationManager()
 {
   communicationManager = new SprinklerCommunicationManager(mqttHandler);
   communicationManager->onWaterRequest(onWaterRequest);
-  Serial.println("Communication manager initiated.");
+  communicationManager->onFanRequest(onFanRequest);
 }
 
 void initSensorHandler()
@@ -140,9 +161,5 @@ void initSensorHandler()
   sensorConfig.type = BME280Sensor;
   sensorConfig.SCLPin = spConfig.BMESCLPin;
   sensorConfig.SDAPin = spConfig.BMESDAPin;
-  TemperatureSensor *tempSensor = initTemperatureSensor(sensorConfig);
-  sysTempSensor = tempSensor;
-
-  sensorHandler = new SensorHandler(std::list<Sensor *>{tempSensor});
-  Serial.println("Sensor handler initiated.");
+  sensorHandler = new SensorHandler(sensorConfig);
 }
