@@ -8,7 +8,7 @@
 #define TEN_MIN_IN_US 600000000
 
 Config config;
-SprinkerConfig spConfig;
+SprinklerConfig sprinklerConfig;
 MqttHandler *mqttHandler;
 SprinklerCommunicationManager *communicationManager;
 SensorHandler *sensorHandler;
@@ -29,8 +29,8 @@ void turnOffFan();
 void setup()
 {
   Serial.begin(9600);
-  pinMode(spConfig.WaterPumpPin, OUTPUT);
-  pinMode(spConfig.FanPin, OUTPUT);
+  pinMode(sprinklerConfig.WaterPumpPin, OUTPUT);
+  pinMode(sprinklerConfig.FanPin, OUTPUT);
 
   connectToWifi();
   delay(500);
@@ -108,14 +108,14 @@ void connectToWifi()
 
 void turnOnFan()
 {
-  digitalWrite(spConfig.FanPin, HIGH);
+  digitalWrite(sprinklerConfig.FanPin, HIGH);
   communicationManager->publishState("fan", "on");
   delay(500);
 }
 
 void turnOffFan()
 {
-  digitalWrite(spConfig.FanPin, LOW);
+  digitalWrite(sprinklerConfig.FanPin, LOW);
   communicationManager->publishState("fan", "off");
   delay(500);
 }
@@ -128,14 +128,14 @@ void onFanRequest(const char *payload)
 
 void turnOnWater()
 {
-  digitalWrite(spConfig.WaterPumpPin, HIGH);
+  digitalWrite(sprinklerConfig.WaterPumpPin, HIGH);
   communicationManager->publishState("water_pump", "on");
   delay(500);
 }
 
 void turnOffWater()
 {
-  digitalWrite(spConfig.WaterPumpPin, LOW);
+  digitalWrite(sprinklerConfig.WaterPumpPin, LOW);
   communicationManager->publishState("water_pump", "off");
   delay(500);
 }
@@ -156,10 +156,10 @@ void initCommunicationManager()
 void initSensorHandler()
 {
   TemperatureSensorConfig sensorConfig = TemperatureSensorConfig([](String payload)
-                                                                 { communicationManager->publishTemperature(payload, spConfig.MqttTopicSensorTemperature); });
+                                                                 { communicationManager->publishTemperature(payload, sprinklerConfig.MqttTopicSensorTemperature); });
 
   sensorConfig.type = BME280Sensor;
-  sensorConfig.SCLPin = spConfig.BMESCLPin;
-  sensorConfig.SDAPin = spConfig.BMESDAPin;
+  sensorConfig.SCLPin = sprinklerConfig.BMESCLPin;
+  sensorConfig.SDAPin = sprinklerConfig.BMESDAPin;
   sensorHandler = new SensorHandler(sensorConfig);
 }

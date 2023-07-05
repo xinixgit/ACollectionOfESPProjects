@@ -6,8 +6,8 @@
 #include <list>
 #include "Config.h"
 
-int volume = 9; // default volume
-std::list<String> playlist;
+int volume = 10; // default volume
+AudioMenu audioMenu;
 
 Audio audio;
 AudioSource *audioSource;
@@ -15,18 +15,31 @@ PublishState publishStateFn;
 
 void playRandomSong();
 
-void publishState(bool isRunning, int volume, const char *title = NULL)
+void publishState(bool isRunning, int volume, const char *title = NULL, AudioMenu *audioMenu = NULL)
 {
   if (publishStateFn != NULL)
   {
-    DynamicJsonDocument doc(64);
+    DynamicJsonDocument doc(512);
     doc["is_on"] = isRunning;
     doc["volume"] = volume;
     doc["title"] = title;
 
+    if (audioMenu != NULL)
+    {
+      JsonObject audioMenuObj = doc.createNestedObject("audio_menu");
+      audioMenuObj["selected_genre"] = audioMenu->selectedGenre;
+
+      JsonArray genres = audioMenuObj.createNestedArray("genres");
+      for (auto genre : audioMenu->getGenres())
+      {
+        genres.add(genre);
+      }
+    }
+
     String payload;
     serializeJson(doc, payload);
     publishStateFn(payload);
+    delay(500);
   }
 }
 
@@ -34,7 +47,7 @@ AudioPlayer::AudioPlayer()
 {
   audioSource = new SDAudioSource();
   // Connect MAX98357 I2S Amplifier Module
-  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  audio.setPinout(spConfig.I2S_BCLK, spConfig.I2S_LRC, spConfig.I2S_DOUT);
   // Set thevolume (0-21)
   audio.setVolume(volume);
 }
@@ -43,10 +56,9 @@ AudioPlayer::AudioPlayer()
 // since playlist should already be populated
 void AudioPlayer::play()
 {
-  playlist.clear();
-  playlist = audioSource->populatePlaylist();
+  audioSource->populateAudioMenu(audioMenu);
   playRandomSong();
-  publishState(audioSource->isRunning, volume);
+  publishState(audioSource->isRunning, volume, NULL, &audioMenu);
 }
 
 void AudioPlayer::loop()
@@ -59,7 +71,7 @@ void AudioPlayer::loop()
   }
 }
 
-void AudioPlayer::onVolumeChangeRequested(const char *payload)
+void AudioPlayer::onVolumeChangeRequested(std::string payload)
 {
   int vol = std::stoi(payload);
   volume = vol;
@@ -67,38 +79,29 @@ void AudioPlayer::onVolumeChangeRequested(const char *payload)
   Serial.printf("Audio volume changed to %d\n", vol);
 }
 
-void AudioPlayer::onStateChangeRequested(const char *payload)
+void AudioPlayer::onStateChangeRequested(std::string payload)
 {
-  if (strcmp(payload, "off") == 0)
+  if (strcmp(payload.c_str(), "off") == 0)
   {
-    if (audio.isRunning())
-    {
-      // stream cannot be stopped, so we simply set volume to 0 to
-      // mute the music; the next song will not be played after this
-      audio.setVolume(0);
-      audioSource->stop(&audio);
-      Serial.println("Audio stopped.");
-    }
+    pause();
     return;
   }
 
-  if (strcmp(payload, "on") == 0)
+  if (strcmp(payload.c_str(), "on") == 0)
   {
-    // here we check if audioSource is running instead of audio is running
-    // since audioSource may simply be muted previously
-    if (!audioSource->isRunning)
-    {
-      audio.setVolume(volume);
-      if (!audio.isRunning())
-      {
-        playRandomSong();
-      }
-      Serial.println("Audio started.");
-    }
+    resume();
     return;
   }
 
   Serial.printf("Unable to identify payload: %s\n", payload);
+}
+
+void AudioPlayer::onGenreChangeRequested(std::string payload)
+{
+  audio.stopSong();
+  audioMenu.selectedGenre = String(payload.c_str());
+  Serial.printf("Playlist refreshed with %d songs in genre %s.\n", audioMenu.getAudiosInSelectedGenre().size(), audioMenu.selectedGenre.c_str());
+  playRandomSong();
 }
 
 void AudioPlayer::setPublishStateFn(PublishState fn)
@@ -106,8 +109,44 @@ void AudioPlayer::setPublishStateFn(PublishState fn)
   publishStateFn = fn;
 }
 
+void AudioPlayer::pause()
+{
+  if (audio.isRunning())
+  {
+    // stream cannot be stopped, so we simply set volume to 0 to
+    // mute the music; the next song will not be played after this
+    audio.setVolume(0);
+    audio.pauseResume();
+    audioSource->pause();
+    Serial.println("Audio paused.");
+  }
+}
+
+void AudioPlayer::resume()
+{
+  // here we check if audioSource is running instead of audio is running
+  // since audioSource may simply be muted previously
+  if (!audioSource->isRunning)
+  {
+    audio.setVolume(volume);
+    if (!audio.isRunning())
+    {
+      audioSource->resume();
+      playRandomSong();
+    }
+    Serial.println("Audio started.");
+  }
+}
+
 void playRandomSong()
 {
+  auto playlist = audioMenu.getAudiosInSelectedGenre();
+  if (playlist.size() == 0)
+  {
+    Serial.println("No song in the playlist.");
+    return;
+  }
+
   int idx = esp_random() % playlist.size();
   auto l_front = playlist.begin();
   std::advance(l_front, idx);
@@ -132,6 +171,7 @@ void audio_id3data(const char *info)
   {
     std::string title = data.substr(7);
     publishState(audioSource->isRunning, volume, title.c_str());
+    delay(500);
   }
 }
 void audio_eof_stream(const char *lastHost)

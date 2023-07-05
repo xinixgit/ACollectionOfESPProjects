@@ -5,7 +5,6 @@
 #include "MqttHandler.h"
 #include "CommunicationManager.h"
 #include "SensorHandler.h"
-#include "I2CAddressScanner.h"
 
 #define TEN_MIN 600000
 
@@ -43,7 +42,6 @@ void loop()
   delay(500);
 
   sensorHandler->publishAll();
-  delay(500);
 
   mqttHandler->disconnect();
 
@@ -87,9 +85,4 @@ void initSensors()
                                                                      { communicationManager->publishTemperature(payload); });
   tempSensorConfig.type = AHT21;
   TemperatureSensor *tempSensor = initTemperatureSensor(tempSensorConfig);
-
-  AirQualitySensorConfig aqiSensorConfig = AirQualitySensorConfig([](String payload)
-                                                                  { communicationManager->publishAQI(payload); });
-  AirQualitySensor *aqiSensor = initAirQualitySensor(aqiSensorConfig);
-  sensorHandler = new SensorHandler(std::list<Sensor *>{tempSensor, aqiSensor});
 }

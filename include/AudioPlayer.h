@@ -10,9 +10,13 @@ struct AudioPlayer
 {
   AudioPlayer();
   void play();
+  void resume();
+  void pause();
+  void stop();
   void loop();
-  void onVolumeChangeRequested(const char *);
-  void onStateChangeRequested(const char *);
+  void onVolumeChangeRequested(std::string);
+  void onStateChangeRequested(std::string);
+  void onGenreChangeRequested(std::string);
   void setPublishStateFn(PublishState);
 };
 

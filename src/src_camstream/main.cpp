@@ -120,7 +120,7 @@ void initSensorHandler()
 {
   TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
                                                                      { communicationManager->publishTemperature(payload, camConfig.MqttTopicSensorTemperature); });
-  tempSensorConfig.type = BME280Sensor;
+  tempSensorConfig.type = AHT21;
   tempSensorConfig.SCLPin = camConfig.SCLPin;
   tempSensorConfig.SDAPin = camConfig.SDAPin;
   sensorHandler = new SensorHandler(tempSensorConfig);

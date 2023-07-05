@@ -3,17 +3,17 @@
 #include "FS.h"
 #include "Config.h"
 
-void fetchPlaylist(File, std::list<String> *);
+void fetchAudios(File, std::map<String, list<String>> &audios, String genre = "");
 
 SDAudioSource::SDAudioSource()
 {
   // Set microSD Card CS as OUTPUT and set HIGH
-  pinMode(SD_CS, OUTPUT);
-  digitalWrite(SD_CS, HIGH);
+  pinMode(spConfig.SD_CS, OUTPUT);
+  digitalWrite(spConfig.SD_CS, HIGH);
 
   // Initialize SPI bus for microSD Card
-  SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SD_CS);
-  if (!SD.begin(SD_CS))
+  SPI.begin(spConfig.SPI_SCK, spConfig.SPI_MISO, spConfig.SPI_MOSI, spConfig.SD_CS);
+  if (!SD.begin(spConfig.SD_CS))
   {
     Serial.println("Error accessing microSD card!");
     return;
@@ -22,15 +22,15 @@ SDAudioSource::SDAudioSource()
   Serial.println("SD ready.");
 }
 
-std::list<String> SDAudioSource::populatePlaylist()
+void SDAudioSource::populateAudioMenu(AudioMenu &menu)
 {
-  std::list<String> playlist;
+  menu.audioMap.clear();
   File root = SD.open("/");
-  fetchPlaylist(root, &playlist);
-  return playlist;
+  fetchAudios(root, menu.audioMap);
+  menu.selectedGenre = spConfig.defaultAudioGenre;
 }
 
-void fetchPlaylist(File dir, std::list<String> *playlist)
+void fetchAudios(File dir, std::map<String, list<String>> &audios, String genre)
 {
   while (true)
   {
@@ -50,12 +50,19 @@ void fetchPlaylist(File dir, std::list<String> *playlist)
 
     if (entry.isDirectory())
     {
-      fetchPlaylist(entry, playlist);
+      String newGenre = genre;
+      if (genre == "")
+      {
+        newGenre = entryName;
+        audios[newGenre] = list<String>();
+      }
+
+      fetchAudios(entry, audios, newGenre);
       continue;
     }
 
-    String currPath = String(dir.path()) + entryName;
-    playlist->push_back(currPath);
+    String currPath = String(dir.path()) + "/" + entryName;
+    audios[genre].push_back(currPath);
     entry.close();
   }
 }
@@ -67,20 +74,12 @@ void SDAudioSource::play(String path, Audio *audio)
   audio->connecttoFS(SD, path.c_str());
 }
 
-void SDAudioSource::stop(Audio *audio)
+void SDAudioSource::pause()
 {
-  if (audio->isRunning())
-  {
-    this->isRunning = false;
-    audio->pauseResume();
-  }
+  this->isRunning = false;
 }
 
-void SDAudioSource::resume(Audio *audio)
+void SDAudioSource::resume()
 {
-  if (!audio->isRunning())
-  {
-    this->isRunning = true;
-    audio->pauseResume();
-  }
+  this->isRunning = true;
 }

@@ -21,6 +21,7 @@ SensorHandler *sensorHandler;
 
 void connectToWifi();
 void connectToMqtt();
+void initSensors();
 void startAudioPlayer(void *);
 void startSensor(void *);
 
@@ -34,8 +35,7 @@ void setup()
   mqttHandler = new MqttHandler(&config.mqtt_config);
   communicationManager = new SoundPlayerCommunicationManager(mqttHandler);
   audioPlayer = new AudioPlayer();
-  sensorHandler = new SensorHandler([](String payload)
-                                    { communicationManager->publishTemperature(payload); });
+  initSensors();
 
   connectToMqtt();
   delay(500);
@@ -87,10 +87,12 @@ void connectToWifi()
 
 void connectToMqtt()
 {
-  communicationManager->onVolumeChangeRequest([](const char *payload)
+  communicationManager->onVolumeChangeRequest([](string payload)
                                               { audioPlayer->onVolumeChangeRequested(payload); });
-  communicationManager->onStateChangeRequest([](const char *payload)
+  communicationManager->onStateChangeRequest([](string payload)
                                              { audioPlayer->onStateChangeRequested(payload); });
+  communicationManager->onGenreChangeRequest([](string payload)
+                                             { audioPlayer->onGenreChangeRequested(payload); });
   mqttHandler->connect();
 }
 
@@ -113,4 +115,13 @@ void startSensor(void *parameter)
     sensorHandler->publishAll();
     vTaskDelay(xDelay);
   }
+}
+
+void initSensors()
+{
+  TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
+                                                                     { communicationManager->publishTemperature(payload, spConfig.MqttTopicSensorTemperature.c_str()); });
+  tempSensorConfig.type = DHT11Sensor;
+  tempSensorConfig.DHTPin = 21;
+  sensorHandler = new SensorHandler(tempSensorConfig);
 }

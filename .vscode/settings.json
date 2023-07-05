@@ -57,5 +57,6 @@
     "ratio": "cpp",
     "ranges": "cpp",
     "variant": "cpp"
-  }
+  },
+  "cmake.configureOnOpen": false
 }

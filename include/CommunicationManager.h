@@ -9,14 +9,16 @@
 #include "Config.h"
 #include <vector>
 
-typedef std::function<void(const char *)> MessageTriggeredActionFn;
+using namespace std;
+
+typedef std::function<void(string)> MessageTriggeredActionFn;
 
 struct MessageTriggeredAction
 {
-  const char *topic;
+  string topic;
   MessageTriggeredActionFn fn;
   uint8_t qos = 0;
-  MessageTriggeredAction(const char *topic, MessageTriggeredActionFn fn, uint8_t qos = 0)
+  MessageTriggeredAction(string topic, MessageTriggeredActionFn fn, uint8_t qos = 0)
   {
     this->topic = topic;
     this->fn = fn;
@@ -26,13 +28,13 @@ struct MessageTriggeredAction
 
 MessageTriggeredActionFn onOffAction(MessageTriggeredActionFn onAction, MessageTriggeredActionFn offAction)
 {
-  return [onAction, offAction](const char *payload)
+  return [onAction, offAction](string payload)
   {
-    if (strcmp(payload, "on") == 0)
+    if (strcmp(payload.c_str(), "on") == 0)
     {
       onAction(payload);
     }
-    else if (strcmp(payload, "off") == 0)
+    else if (strcmp(payload.c_str(), "off") == 0)
     {
       offAction(payload);
     }
@@ -61,29 +63,28 @@ struct CommunicationManager
     {
       for (auto action : messageTriggeredActions)
       {
-        mqttHandler->subscribe(action.topic, action.qos);
+        mqttHandler->subscribe(action.topic.c_str(), action.qos);
       }
     }
   }
 
   virtual void onMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
   {
-    const char *pl = "";
+    std::string payloadStr;
     if (len > 0)
     {
-      std::string str;
-      str.append(payload);
-      pl = str.substr(0, len).c_str();
+      payloadStr.append(payload);
+      payloadStr = payloadStr.substr(0, len);
     }
 
-    Serial.printf("Received message from MQTT topic %s with payload: %s\n", topic, pl);
+    Serial.printf("Received message from MQTT topic %s with payload: %s\n", topic, payloadStr.c_str());
     if (messageTriggeredActions.size() > 0)
     {
       for (auto action : messageTriggeredActions)
       {
-        if (strcmp(action.topic, topic) == 0)
+        if (strcmp(action.topic.c_str(), topic) == 0)
         {
-          action.fn(pl);
+          action.fn(payloadStr);
         }
       }
     }
@@ -112,25 +113,32 @@ struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
 {
   MessageTriggeredActionFn volumeChangeRequestCallback;
   MessageTriggeredActionFn stateChangeRequestCallback;
+  MessageTriggeredActionFn genreChangeRequestCallback;
 
   SoundPlayerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
   {
     messageTriggeredActions.push_back(
         MessageTriggeredAction(
-            MQTT_TOPIC_AUDIOPLAYER_CHANGE_STATE,
-            [this](const char *payload)
+            spConfig.MqttTopicChangeState,
+            [this](string payload)
             { this->stateChangeRequestCallback(payload); },
             1));
     messageTriggeredActions.push_back(
         MessageTriggeredAction(
-            MQTT_TOPIC_AUDIOPLAYER_CHANGE_VOL,
-            [this](const char *payload)
+            spConfig.MqttTopicChangeVol,
+            [this](string payload)
             { this->volumeChangeRequestCallback(payload); },
+            1));
+    messageTriggeredActions.push_back(
+        MessageTriggeredAction(
+            spConfig.MqttTopicChangeGenre,
+            [this](string payload)
+            { this->genreChangeRequestCallback(payload); },
             1));
   }
   void publishState(String payload)
   {
-    mqttHandler->publishPayload(MQTT_TOPIC_AUDIOPLAYER_STATE_CHANGED, payload.c_str());
+    mqttHandler->publishPayload(spConfig.MqttTopicStateChanged, payload.c_str());
   }
   void onVolumeChangeRequest(MessageTriggeredActionFn callback)
   {
@@ -140,6 +148,10 @@ struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
   {
     stateChangeRequestCallback = callback;
   }
+  void onGenreChangeRequest(MessageTriggeredActionFn callback)
+  {
+    genreChangeRequestCallback = callback;
+  }
 };
 
 // ------------------------------ SprinklerCommunicationManager ------------------------------
@@ -147,21 +159,21 @@ struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
 {
   MessageTriggeredActionFn waterRequestCallback;
   MessageTriggeredActionFn fanRequestCallback;
-  SprinkerConfig *config;
+  SprinklerConfig *config;
 
   SprinklerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
   {
-    config = new SprinkerConfig();
+    config = new SprinklerConfig();
     messageTriggeredActions.push_back(
         MessageTriggeredAction(
             config->MqttTopicWater,
-            [this](const char *payload)
+            [this](string payload)
             { this->waterRequestCallback(payload); },
             1));
     messageTriggeredActions.push_back(
         MessageTriggeredAction(
             config->MqttTopicFan,
-            [this](const char *payload)
+            [this](string payload)
             { this->fanRequestCallback(payload); },
             1));
   }

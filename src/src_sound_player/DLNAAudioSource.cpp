@@ -10,12 +10,12 @@ SoapESP32 soap(&client, &udp);
 void discoverDlnaServer();
 void fetchPlaylist(String objectId, std::list<String> *playlist);
 
-std::list<String> DLNAAudioSource::populatePlaylist()
+void DLNAAudioSource::populateAudioMenu(AudioMenu &menu)
 {
   std::list<String> playlist;
   discoverDlnaServer();
   fetchPlaylist("0", &playlist);
-  return playlist;
+  menu.audioMap[""] = playlist;
 }
 
 void DLNAAudioSource::play(String path, Audio *audio)
@@ -25,12 +25,12 @@ void DLNAAudioSource::play(String path, Audio *audio)
   audio->connecttohost(uri.c_str());
 }
 
-void DLNAAudioSource::stop(Audio *audio)
+void DLNAAudioSource::pause()
 {
   this->isRunning = false;
 }
 
-void DLNAAudioSource::resume(Audio *audio)
+void DLNAAudioSource::resume()
 {
   this->isRunning = true;
 }

@@ -300,8 +300,11 @@ struct ENS160Sensor : AirQualitySensor
 
   String createPayload()
   {
-    sensor->measure(true);
-    sensor->measureRaw(true);
+    if (!sensor->set_envdata(22.78, 47))
+    {
+      Serial.println("Unable to set env data.");
+    }
+    sensor->measure();
     return AirQualitySensor::createPayload();
   }
 
@@ -343,11 +346,16 @@ AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig config)
   {
     ScioSense_ENS160 *ens160 = new ScioSense_ENS160(ENS160_I2CADDR_1);
     ens160->setI2C(config.SDAPin, config.SCLPin);
-    ens160->begin();
+
+    if (!ens160->begin())
+    {
+      Serial.println("Unable to start ENS160.");
+      return nullptr;
+    }
 
     if (!ens160->available())
     {
-      Serial.println("Unable to initiatiate ENS160 sensor");
+      Serial.println("ENS160 sensor is not available.");
       return nullptr;
     }
 
@@ -396,6 +404,7 @@ struct SensorHandler
     for (auto sensor : sensors)
     {
       sensor->publishFn(sensor->createPayload());
+      delay(500);
     }
   }
 };
