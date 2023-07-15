@@ -12,7 +12,7 @@
 Config config;
 CamStreamConfig camConfig;
 MqttHandler *mqttHandler;
-TemperatureSensorCommunicationManager *communicationManager;
+TempSensorCommunicationManager *tempCm;
 SensorHandler *sensorHandler;
 ESPCamHandler *camHandler;
 audp::WebStreamer *webStreamer;
@@ -59,7 +59,7 @@ void setup()
   mqttHandler->connect();
   delay(500);
 
-  communicationManager = new TemperatureSensorCommunicationManager(mqttHandler);
+  tempCm = new TempSensorCommunicationManager(mqttHandler);
   delay(500);
 
   initSensorHandler();
@@ -118,10 +118,8 @@ void startWebStream(void *parameter)
 
 void initSensorHandler()
 {
-  TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
-                                                                     { communicationManager->publishTemperature(payload, camConfig.MqttTopicSensorTemperature); });
-  tempSensorConfig.type = AHT21;
+  TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig(AHT21);
   tempSensorConfig.SCLPin = camConfig.SCLPin;
   tempSensorConfig.SDAPin = camConfig.SDAPin;
-  sensorHandler = new SensorHandler(tempSensorConfig);
+  sensorHandler = new SensorHandler(tempSensorConfig, tempCm);
 }

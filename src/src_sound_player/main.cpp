@@ -33,7 +33,7 @@ void setup()
   delay(500);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
-  communicationManager = new SoundPlayerCommunicationManager(mqttHandler);
+  communicationManager = new SoundPlayerCommunicationManager(mqttHandler, spConfig.MqttTopicSensorTemperature);
   audioPlayer = new AudioPlayer();
   initSensors();
 
@@ -119,9 +119,7 @@ void startSensor(void *parameter)
 
 void initSensors()
 {
-  TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
-                                                                     { communicationManager->publishTemperature(payload, spConfig.MqttTopicSensorTemperature); });
-  tempSensorConfig.type = DHT11Sensor;
+  TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig(DHT11Sensor);
   tempSensorConfig.DHTPin = 21;
-  sensorHandler = new SensorHandler(tempSensorConfig);
+  sensorHandler = new SensorHandler(tempSensorConfig, communicationManager);
 }

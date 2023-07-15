@@ -148,18 +148,15 @@ void onWaterRequest(std::string payload)
 
 void initCommunicationManager()
 {
-  communicationManager = new SprinklerCommunicationManager(mqttHandler);
+  communicationManager = new SprinklerCommunicationManager(mqttHandler, sprinklerConfig.MqttTopicSensorTemperature);
   communicationManager->onWaterRequest(onWaterRequest);
   communicationManager->onFanRequest(onFanRequest);
 }
 
 void initSensorHandler()
 {
-  TemperatureSensorConfig sensorConfig = TemperatureSensorConfig([](String payload)
-                                                                 { communicationManager->publishTemperature(payload, sprinklerConfig.MqttTopicSensorTemperature); });
-
-  sensorConfig.type = BME280Sensor;
+  TemperatureSensorConfig sensorConfig = TemperatureSensorConfig(BME280Sensor);
   sensorConfig.SCLPin = sprinklerConfig.BMESCLPin;
   sensorConfig.SDAPin = sprinklerConfig.BMESDAPin;
-  sensorHandler = new SensorHandler(sensorConfig);
+  sensorHandler = new SensorHandler(sensorConfig, communicationManager);
 }

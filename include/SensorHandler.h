@@ -10,8 +10,15 @@
 #include <DHT.h>
 #include "MQ135.h"
 #include <list>
+#include "Config.h"
+#include "CommunicationManager.h"
 
-typedef std::function<void(String)> PublishFn;
+enum SensorCategory
+{
+  Unknown,
+  Temperature,
+  AirQuality
+};
 
 enum TemperatureSensorType
 {
@@ -30,25 +37,19 @@ enum AirQualitySensorType
 
 struct TemperatureSensorConfig
 {
-  PublishFn publishFn;
   TemperatureSensorType type;
   uint16_t DHTPin;
   uint16_t SCLPin;
   uint16_t SDAPin;
 
-  TemperatureSensorConfig()
-  {
-    this->type = NoopTempSensor;
-  }
+  TemperatureSensorConfig() : TemperatureSensorConfig(NoopTempSensor){};
 
   TemperatureSensorConfig(
-      PublishFn publishFn,
-      TemperatureSensorType type = DHT11Sensor,
+      TemperatureSensorType type,
       uint16_t DHTPin = DHTPIN,
       uint16_t SCLPin = SCL, // default SCL on a ESP8266 is 5
       uint16_t SDAPin = SDA) // default SDA on a ESP8266 is 4
   {
-    this->publishFn = publishFn;
     this->type = type;
     this->DHTPin = DHTPin;
     this->SCLPin = SCLPin;
@@ -58,25 +59,19 @@ struct TemperatureSensorConfig
 
 struct AirQualitySensorConfig
 {
-  PublishFn publishFn;
   AirQualitySensorType type;
   String location;
   uint16_t SCLPin;
   uint16_t SDAPin;
 
-  AirQualitySensorConfig()
-  {
-    this->type = NoSensor;
-  }
+  AirQualitySensorConfig() : AirQualitySensorConfig(NoSensor){};
 
   AirQualitySensorConfig(
-      PublishFn publishFn,
-      AirQualitySensorType type = ENS160,
+      AirQualitySensorType type,
       String location = LOCATION_TEST,
       uint16_t SCLPin = SCL, // default SCL on a ESP8266 is 5
       uint16_t SDAPin = SDA) // default SDA on a ESP8266 is 4)
   {
-    this->publishFn = publishFn;
     this->type = type;
     this->location = location;
     this->SCLPin = SCLPin;
@@ -86,20 +81,15 @@ struct AirQualitySensorConfig
 
 struct Sensor
 {
-  PublishFn publishFn;
-  Sensor(PublishFn publishFn)
-  {
-    this->publishFn = publishFn;
-  }
-
   virtual String createPayload() { return ""; };
+
+  virtual SensorCategory getCategory() { return Unknown; }
 };
 
 struct TemperatureSensor : Sensor
 {
-  TemperatureSensor(PublishFn publishFn) : Sensor(publishFn)
-  {
-  }
+
+  TemperatureSensor() {}
 
   virtual float readTemperature() { return 0; }
 
@@ -123,12 +113,14 @@ struct TemperatureSensor : Sensor
     serializeJson(doc, payload);
     return payload;
   }
+
+  SensorCategory getCategory() { return Temperature; }
 };
 
 struct DHT11TemperatureSensor : TemperatureSensor
 {
   DHT *dht;
-  DHT11TemperatureSensor(DHT *dht, PublishFn publishFn) : TemperatureSensor(publishFn)
+  DHT11TemperatureSensor(DHT *dht)
   {
     this->dht = dht;
   }
@@ -148,7 +140,7 @@ struct BME280TemperatureSensor : TemperatureSensor
 {
   Adafruit_BME280 *bme;
 
-  BME280TemperatureSensor(Adafruit_BME280 *bme, PublishFn publishFn) : TemperatureSensor(publishFn)
+  BME280TemperatureSensor(Adafruit_BME280 *bme)
   {
     this->bme = bme;
   }
@@ -177,7 +169,7 @@ struct BME280TemperatureSensor : TemperatureSensor
 struct AHT21Sensor : TemperatureSensor
 {
   Adafruit_AHTX0 *aht;
-  AHT21Sensor(Adafruit_AHTX0 *aht, PublishFn publishFn) : TemperatureSensor(publishFn)
+  AHT21Sensor(Adafruit_AHTX0 *aht)
   {
     this->aht = aht;
   }
@@ -197,79 +189,11 @@ struct AHT21Sensor : TemperatureSensor
   }
 };
 
-TemperatureSensor *initTemperatureSensor(TemperatureSensorConfig sensorConfig)
-{
-  switch (sensorConfig.type)
-  {
-  case NoopTempSensor:
-  {
-    return nullptr;
-  }
-  case DHT11Sensor:
-  {
-    DHT *dht = new DHT(sensorConfig.DHTPin, DHT11);
-    dht->begin();
-    return new DHT11TemperatureSensor(dht, sensorConfig.publishFn);
-  }
-  case BME280Sensor:
-  {
-    TwoWire *I2CBME;
-#ifdef ESP8266
-    I2CBME = new TwoWire();
-    I2CBME->begin(sensorConfig.SDAPin, sensorConfig.SCLPin);
-#elif defined(ESP32)
-    I2CBME = new TwoWire(0);
-    bool status = I2CBME->begin(sensorConfig.SDAPin, sensorConfig.SCLPin);
-    if (!status)
-    {
-      Serial.println("Could not find a valid BME280 sensor, check wiring!");
-      return nullptr;
-    }
-#else
-#error "Unsupported platform"
-#endif
-
-    Adafruit_BME280 *bme = new Adafruit_BME280();
-    bme->begin(0x76, I2CBME);
-    return new BME280TemperatureSensor(bme, sensorConfig.publishFn);
-  }
-  case AHT21:
-  {
-    TwoWire *wire;
-#ifdef ESP8266
-    wire = new TwoWire();
-    wire->begin(sensorConfig.SDAPin, sensorConfig.SCLPin);
-#elif defined(ESP32)
-    wire = new TwoWire(0);
-    bool status = wire->begin(sensorConfig.SDAPin, sensorConfig.SCLPin);
-    if (!status)
-    {
-      Serial.println("Could not start wiring between SDA & SCL, check wiring!");
-      return nullptr;
-    }
-#endif
-
-    Adafruit_AHTX0 *aht = new Adafruit_AHTX0();
-    if (!aht->begin(wire))
-    {
-      Serial.println("Could not start AHT sensor, check wiring!");
-      return nullptr;
-    }
-
-    return new AHT21Sensor(aht, sensorConfig.publishFn);
-  }
-
-  default:
-    Serial.printf("Cannot find the temp sensor type specified: %d", sensorConfig.type);
-    return nullptr;
-  }
-}
-
 struct AirQualitySensor : Sensor
 {
   String location;
 
-  AirQualitySensor(String location, PublishFn publishFn) : Sensor(publishFn)
+  AirQualitySensor(String location)
   {
     this->location = location;
   }
@@ -307,7 +231,9 @@ struct AirQualitySensor : Sensor
 
   String getLocation() { return location; }
 
-  virtual String createPayload()
+  SensorCategory getCategory() { return AirQuality; }
+
+  String createPayload()
   {
     DynamicJsonDocument doc(128);
     doc["location"] = this->getLocation();
@@ -326,19 +252,9 @@ struct ENS160Sensor : AirQualitySensor
 {
   ScioSense_ENS160 *sensor;
 
-  ENS160Sensor(ScioSense_ENS160 *sensor, String location, PublishFn publishFn) : AirQualitySensor(location, publishFn)
+  ENS160Sensor(ScioSense_ENS160 *sensor, String location) : AirQualitySensor(location)
   {
     this->sensor = sensor;
-  }
-
-  String createPayload()
-  {
-    if (!sensor->set_envdata(22.78, 47))
-    {
-      Serial.println("Unable to set env data.");
-    }
-    sensor->measure();
-    return AirQualitySensor::createPayload();
   }
 
   uint8_t getAQI()
@@ -371,7 +287,7 @@ struct MQ135Sensor : AirQualitySensor
 {
   MQ135 *sensor;
 
-  MQ135Sensor(MQ135 *sensor, String location, PublishFn publishFn) : AirQualitySensor(location, publishFn)
+  MQ135Sensor(MQ135 *sensor, String location) : AirQualitySensor(location)
   {
     this->sensor = sensor;
   }
@@ -382,67 +298,37 @@ struct MQ135Sensor : AirQualitySensor
   };
 };
 
-AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig config)
-{
-  switch (config.type)
-  {
-  case NoSensor:
-  {
-    return nullptr;
-  }
-  case ENS160:
-  {
-    ScioSense_ENS160 *ens160 = new ScioSense_ENS160(ENS160_I2CADDR_1);
-    ens160->setI2C(config.SDAPin, config.SCLPin);
-
-    if (!ens160->begin())
-    {
-      Serial.println("Unable to start ENS160.");
-      return nullptr;
-    }
-
-    if (!ens160->available())
-    {
-      Serial.println("ENS160 sensor is not available.");
-      return nullptr;
-    }
-
-    if (!ens160->setMode(ENS160_OPMODE_STD))
-    {
-      Serial.println("Unable to set ENS160 to standard mode.");
-      return nullptr;
-    }
-
-    return new ENS160Sensor(ens160, config.location, config.publishFn);
-  }
-  case Type_MQ135:
-  {
-    MQ135 *sensor = new MQ135(A0);
-    return new MQ135Sensor(sensor, config.location, config.publishFn);
-  }
-  default:
-  {
-    return nullptr;
-  }
-  }
-}
+TemperatureSensor *initTemperatureSensor(TemperatureSensorConfig);
+AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig);
 
 struct SensorHandler
 {
   std::list<Sensor *> sensors;
+  TempSensorCommunicationManager *tempCm;
+  AirQualitySensorCommunicationManager *aqCm;
+
   SensorHandler(std::list<Sensor *> sensors)
   {
     this->sensors = sensors;
   };
 
-  SensorHandler(AirQualitySensorConfig aqSensorConfig) : SensorHandler(TemperatureSensorConfig(), aqSensorConfig) {}
-
-  SensorHandler(TemperatureSensorConfig tempSensorConfig) : SensorHandler(tempSensorConfig, AirQualitySensorConfig()) {}
+  SensorHandler(
+      AirQualitySensorConfig aqSensorConfig,
+      AirQualitySensorCommunicationManager *aqCm) : SensorHandler(TemperatureSensorConfig(), nullptr, aqSensorConfig, aqCm) {}
 
   SensorHandler(
       TemperatureSensorConfig tempSensorConfig,
-      AirQualitySensorConfig aqSensorConfig)
+      TempSensorCommunicationManager *tempCm) : SensorHandler(tempSensorConfig, tempCm, AirQualitySensorConfig(), nullptr) {}
+
+  SensorHandler(
+      TemperatureSensorConfig tempSensorConfig,
+      TempSensorCommunicationManager *tempCm,
+      AirQualitySensorConfig aqSensorConfig,
+      AirQualitySensorCommunicationManager *aqCm)
   {
+    this->tempCm = tempCm;
+    this->aqCm = aqCm;
+
     auto tempSensor = initTemperatureSensor(tempSensorConfig);
     if (tempSensor != nullptr)
     {
@@ -460,7 +346,16 @@ struct SensorHandler
   {
     for (auto sensor : sensors)
     {
-      sensor->publishFn(sensor->createPayload());
+      if (sensor->getCategory() == Temperature && tempCm != nullptr)
+      {
+        String json = sensor->createPayload();
+        tempCm->publishTemperature(json);
+      }
+      else if (sensor->getCategory() == AirQuality && aqCm != nullptr)
+      {
+        String json = sensor->createPayload();
+        aqCm->publishAirQuality(json);
+      }
       delay(500);
     }
   }

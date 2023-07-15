@@ -26,21 +26,6 @@ struct MessageTriggeredAction
   }
 };
 
-MessageTriggeredActionFn onOffAction(MessageTriggeredActionFn onAction, MessageTriggeredActionFn offAction)
-{
-  return [onAction, offAction](string payload)
-  {
-    if (strcmp(payload.c_str(), "on") == 0)
-    {
-      onAction(payload);
-    }
-    else if (strcmp(payload.c_str(), "off") == 0)
-    {
-      offAction(payload);
-    }
-  };
-}
-
 struct CommunicationManager
 {
   MqttHandler *mqttHandler;
@@ -92,30 +77,40 @@ struct CommunicationManager
 };
 
 // ------------------------------ TemperatureSensorCommunicationManager ------------------------------
-struct TemperatureSensorCommunicationManager : CommunicationManager
+struct TempSensorCommunicationManager : CommunicationManager
 {
-  TemperatureSensorCommunicationManager(MqttHandler *mqttHandler, std::vector<MessageTriggeredAction> messageTriggeredActions = {}) : CommunicationManager(mqttHandler, messageTriggeredActions)
+  String topic;
+  TempSensorCommunicationManager(
+      MqttHandler *mqttHandler,
+      String topic = MQTT_TOPIC_SENSOR_TEMPERATURE,
+      std::vector<MessageTriggeredAction> messageTriggeredActions = {}) : CommunicationManager(mqttHandler, messageTriggeredActions) {}
+  void publishTemperature(String payload)
   {
+    mqttHandler->publishPayload(topic.c_str(), payload.c_str());
   }
+};
 
-  void publishTemperature(String payload, const char *topic = MQTT_TOPIC_SENSOR_TEMPERATURE)
+struct AirQualitySensorCommunicationManager : CommunicationManager
+{
+  String topic;
+  AirQualitySensorCommunicationManager(
+      MqttHandler *mqttHandler,
+      String topic = MQTT_TOPIC_SENSOR_AQI,
+      std::vector<MessageTriggeredAction> messageTriggeredActions = {}) : CommunicationManager(mqttHandler, messageTriggeredActions) {}
+  void publishAirQuality(String payload)
   {
-    mqttHandler->publishPayload(topic, payload.c_str());
-  }
-  void publishAQI(String payload, const char *topic = MQTT_TOPIC_SENSOR_AQI)
-  {
-    mqttHandler->publishPayload(topic, payload.c_str());
+    mqttHandler->publishPayload(topic.c_str(), payload.c_str());
   }
 };
 
 // ------------------------------ SoundPlayerCommunicationManager ------------------------------
-struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
+struct SoundPlayerCommunicationManager : TempSensorCommunicationManager
 {
   MessageTriggeredActionFn volumeChangeRequestCallback;
   MessageTriggeredActionFn stateChangeRequestCallback;
   MessageTriggeredActionFn genreChangeRequestCallback;
 
-  SoundPlayerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
+  SoundPlayerCommunicationManager(MqttHandler *mqttHandler, String topic) : TempSensorCommunicationManager(mqttHandler, topic)
   {
     messageTriggeredActions.push_back(
         MessageTriggeredAction(
@@ -155,13 +150,13 @@ struct SoundPlayerCommunicationManager : TemperatureSensorCommunicationManager
 };
 
 // ------------------------------ SprinklerCommunicationManager ------------------------------
-struct SprinklerCommunicationManager : TemperatureSensorCommunicationManager
+struct SprinklerCommunicationManager : TempSensorCommunicationManager
 {
   MessageTriggeredActionFn waterRequestCallback;
   MessageTriggeredActionFn fanRequestCallback;
   SprinklerConfig *config;
 
-  SprinklerCommunicationManager(MqttHandler *mqttHandler) : TemperatureSensorCommunicationManager(mqttHandler)
+  SprinklerCommunicationManager(MqttHandler *mqttHandler, String topic) : TempSensorCommunicationManager(mqttHandler, topic)
   {
     config = new SprinklerConfig();
     messageTriggeredActions.push_back(

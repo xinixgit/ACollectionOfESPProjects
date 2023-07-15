@@ -12,7 +12,7 @@ Config config;
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 MqttHandler *mqttHandler;
-TemperatureSensorCommunicationManager *communicationManager;
+AirQualitySensorCommunicationManager *aqCm;
 SensorHandler *sensorHandler;
 
 // functions declaration
@@ -26,7 +26,7 @@ void setup()
   Serial.begin(9600);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
-  communicationManager = new TemperatureSensorCommunicationManager(mqttHandler);
+  aqCm = new AirQualitySensorCommunicationManager(mqttHandler);
   initSensors();
 
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
@@ -85,8 +85,6 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
 
 void initSensors()
 {
-  AirQualitySensorConfig aqSensorConfig = AirQualitySensorConfig([](String payload)
-                                                                 { communicationManager->publishAQI(payload); });
-  aqSensorConfig.type = Type_MQ135;
-  sensorHandler = new SensorHandler(aqSensorConfig);
+  AirQualitySensorConfig aqSensorConfig = AirQualitySensorConfig(Type_MQ135);
+  sensorHandler = new SensorHandler(aqSensorConfig, aqCm);
 }
