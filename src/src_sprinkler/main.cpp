@@ -120,7 +120,7 @@ void turnOffFan()
   delay(500);
 }
 
-void onFanRequest(const char *payload)
+void onFanRequest(std::string payload)
 {
   doFan = true;
   fanOnDurationInMs = std::stoi(payload) * 1000;
@@ -140,7 +140,7 @@ void turnOffWater()
   delay(500);
 }
 
-void onWaterRequest(const char *payload)
+void onWaterRequest(std::string payload)
 {
   doWater = true;
   waterOnDurationInMs = std::stoi(payload) * 1000;

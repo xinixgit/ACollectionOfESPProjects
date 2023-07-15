@@ -120,7 +120,7 @@ void startSensor(void *parameter)
 void initSensors()
 {
   TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
-                                                                     { communicationManager->publishTemperature(payload, spConfig.MqttTopicSensorTemperature.c_str()); });
+                                                                     { communicationManager->publishTemperature(payload, spConfig.MqttTopicSensorTemperature); });
   tempSensorConfig.type = DHT11Sensor;
   tempSensorConfig.DHTPin = 21;
   sensorHandler = new SensorHandler(tempSensorConfig);

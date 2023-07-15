@@ -42,12 +42,16 @@ void loop()
   delay(500);
 
   sensorHandler->publishAll();
+  delay(500);
 
   mqttHandler->disconnect();
+  delay(500);
 
   WiFi.mode(WIFI_OFF);
+  delay(500);
 
   WiFi.forceSleepBegin();
+  delay(500);
 
   delay(TEN_MIN);
 
@@ -81,8 +85,8 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
 
 void initSensors()
 {
-  TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig([](String payload)
-                                                                     { communicationManager->publishTemperature(payload); });
-  tempSensorConfig.type = AHT21;
-  TemperatureSensor *tempSensor = initTemperatureSensor(tempSensorConfig);
+  AirQualitySensorConfig aqSensorConfig = AirQualitySensorConfig([](String payload)
+                                                                 { communicationManager->publishAQI(payload); });
+  aqSensorConfig.type = Type_MQ135;
+  sensorHandler = new SensorHandler(aqSensorConfig);
 }

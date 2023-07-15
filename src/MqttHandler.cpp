@@ -6,7 +6,6 @@ AsyncMqttClient mqttClient;
 
 void onDisconnect(AsyncMqttClientDisconnectReason);
 void onPublish(uint16_t);
-void publishPayload(const char *, const char *);
 
 MqttHandler::MqttHandler(MqttConfig *config)
 {

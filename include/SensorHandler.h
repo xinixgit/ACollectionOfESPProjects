@@ -8,12 +8,14 @@
 #include <Adafruit_AHTX0.h>
 #include <ScioSense_ENS160.h>
 #include <DHT.h>
+#include "MQ135.h"
 #include <list>
 
 typedef std::function<void(String)> PublishFn;
 
 enum TemperatureSensorType
 {
+  NoopTempSensor,
   DHT11Sensor,
   BME280Sensor,
   AHT21
@@ -22,7 +24,8 @@ enum TemperatureSensorType
 enum AirQualitySensorType
 {
   NoSensor,
-  ENS160
+  ENS160,
+  Type_MQ135
 };
 
 struct TemperatureSensorConfig
@@ -32,6 +35,11 @@ struct TemperatureSensorConfig
   uint16_t DHTPin;
   uint16_t SCLPin;
   uint16_t SDAPin;
+
+  TemperatureSensorConfig()
+  {
+    this->type = NoopTempSensor;
+  }
 
   TemperatureSensorConfig(
       PublishFn publishFn,
@@ -52,6 +60,7 @@ struct AirQualitySensorConfig
 {
   PublishFn publishFn;
   AirQualitySensorType type;
+  String location;
   uint16_t SCLPin;
   uint16_t SDAPin;
 
@@ -63,11 +72,13 @@ struct AirQualitySensorConfig
   AirQualitySensorConfig(
       PublishFn publishFn,
       AirQualitySensorType type = ENS160,
+      String location = LOCATION_TEST,
       uint16_t SCLPin = SCL, // default SCL on a ESP8266 is 5
       uint16_t SDAPin = SDA) // default SDA on a ESP8266 is 4)
   {
     this->publishFn = publishFn;
     this->type = type;
+    this->location = location;
     this->SCLPin = SCLPin;
     this->SDAPin = SDAPin;
   }
@@ -102,7 +113,7 @@ struct TemperatureSensor : Sensor
 
   String createPayload()
   {
-    DynamicJsonDocument doc(64);
+    DynamicJsonDocument doc(128);
     doc["temperature_f"] = this->readTemperatureF();
     doc["humidity"] = this->readHumidity();
     doc["pressure"] = this->readPressure();
@@ -190,6 +201,10 @@ TemperatureSensor *initTemperatureSensor(TemperatureSensorConfig sensorConfig)
 {
   switch (sensorConfig.type)
   {
+  case NoopTempSensor:
+  {
+    return nullptr;
+  }
   case DHT11Sensor:
   {
     DHT *dht = new DHT(sensorConfig.DHTPin, DHT11);
@@ -252,21 +267,24 @@ TemperatureSensor *initTemperatureSensor(TemperatureSensorConfig sensorConfig)
 
 struct AirQualitySensor : Sensor
 {
-  AirQualitySensor(PublishFn publishFn) : Sensor(publishFn)
+  String location;
+
+  AirQualitySensor(String location, PublishFn publishFn) : Sensor(publishFn)
   {
+    this->location = location;
   }
 
   /**
    * Get the air quality index
    * Return value: 1-Excellent, 2-Good, 3-Moderate, 4-Poor, 5-Unhealthy
    */
-  virtual uint8_t getAQI() { return -1; };
+  virtual uint8_t getAQI() { return 0; };
 
   /**
    * Get TVOC concentration
    * Return value range: 0–65000, unit: ppb
    */
-  virtual uint16_t getTVOC() { return -1; };
+  virtual uint16_t getTVOC() { return 0; };
 
   /**
    * Get CO2 equivalent concentration calculated according to the detected data of VOCs and hydrogen (eCO2 – Equivalent CO2)
@@ -274,14 +292,29 @@ struct AirQualitySensor : Sensor
    * Five levels: Excellent(400 - 600), Good(600 - 800), Moderate(800 - 1000),
    *               Poor(1000 - 1500), Unhealthy(> 1500)
    */
-  virtual uint16_t getECO2() { return -1; };
+  virtual uint16_t getECO2() { return 0; };
+
+  /**
+   * Experts measure air quality using parts per million, or PPM. This indicates how many milligrams
+   * of pollutants there are per square meter of air. However, this measurement isn’t necessarily
+   * meaningful to the average person who wants to ensure the air they breathe is safe.
+   *
+   * To that end, the US Environmental Protection Agency (EPA) developed the Air Quality Index, or
+   * AQI, to measure air pollution in a way average citizens can understand.
+   *
+   */
+  virtual uint16_t getAirQuality() { return 0; };
+
+  String getLocation() { return location; }
 
   virtual String createPayload()
   {
-    DynamicJsonDocument doc(64);
+    DynamicJsonDocument doc(128);
+    doc["location"] = this->getLocation();
     doc["aqi"] = this->getAQI();
     doc["tvoc"] = this->getTVOC();
     doc["co2"] = this->getECO2();
+    doc["aq"] = this->getAirQuality();
 
     String payload;
     serializeJson(doc, payload);
@@ -293,7 +326,7 @@ struct ENS160Sensor : AirQualitySensor
 {
   ScioSense_ENS160 *sensor;
 
-  ENS160Sensor(ScioSense_ENS160 *sensor, PublishFn publishFn) : AirQualitySensor(publishFn)
+  ENS160Sensor(ScioSense_ENS160 *sensor, String location, PublishFn publishFn) : AirQualitySensor(location, publishFn)
   {
     this->sensor = sensor;
   }
@@ -334,6 +367,21 @@ struct ENS160Sensor : AirQualitySensor
   };
 };
 
+struct MQ135Sensor : AirQualitySensor
+{
+  MQ135 *sensor;
+
+  MQ135Sensor(MQ135 *sensor, String location, PublishFn publishFn) : AirQualitySensor(location, publishFn)
+  {
+    this->sensor = sensor;
+  }
+
+  uint16_t getAirQuality()
+  {
+    return sensor->getPPM();
+  };
+};
+
 AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig config)
 {
   switch (config.type)
@@ -365,7 +413,12 @@ AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig config)
       return nullptr;
     }
 
-    return new ENS160Sensor(ens160, config.publishFn);
+    return new ENS160Sensor(ens160, config.location, config.publishFn);
+  }
+  case Type_MQ135:
+  {
+    MQ135 *sensor = new MQ135(A0);
+    return new MQ135Sensor(sensor, config.location, config.publishFn);
   }
   default:
   {
@@ -382,20 +435,24 @@ struct SensorHandler
     this->sensors = sensors;
   };
 
+  SensorHandler(AirQualitySensorConfig aqSensorConfig) : SensorHandler(TemperatureSensorConfig(), aqSensorConfig) {}
+
+  SensorHandler(TemperatureSensorConfig tempSensorConfig) : SensorHandler(tempSensorConfig, AirQualitySensorConfig()) {}
+
   SensorHandler(
-      TemperatureSensorConfig temperatureSensorConfig,
-      AirQualitySensorConfig airQualitySensorConfig = AirQualitySensorConfig())
+      TemperatureSensorConfig tempSensorConfig,
+      AirQualitySensorConfig aqSensorConfig)
   {
-    auto temperatureSensor = initTemperatureSensor(temperatureSensorConfig);
-    if (temperatureSensor != nullptr)
+    auto tempSensor = initTemperatureSensor(tempSensorConfig);
+    if (tempSensor != nullptr)
     {
-      this->sensors.push_back(temperatureSensor);
+      this->sensors.push_back(tempSensor);
     }
 
-    auto airQualitySensor = initAirQualitySensor(airQualitySensorConfig);
-    if (airQualitySensor != nullptr)
+    auto aqSensor = initAirQualitySensor(aqSensorConfig);
+    if (aqSensor != nullptr)
     {
-      this->sensors.push_back(airQualitySensor);
+      this->sensors.push_back(aqSensor);
     }
   }
 
