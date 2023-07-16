@@ -294,7 +294,7 @@ struct MQ135Sensor : AirQualitySensor
 
   uint16_t getAirQuality()
   {
-    return sensor->getPPM();
+    return analogRead(A0);
   };
 };
 
@@ -356,7 +356,6 @@ struct SensorHandler
         String json = sensor->createPayload();
         aqCm->publishAirQuality(json);
       }
-      delay(500);
     }
   }
 };

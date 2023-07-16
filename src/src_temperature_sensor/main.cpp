@@ -12,7 +12,7 @@ Config config;
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 MqttHandler *mqttHandler;
-AirQualitySensorCommunicationManager *aqCm;
+AirQualitySensorCommunicationManager *aqCommMgr;
 SensorHandler *sensorHandler;
 
 // functions declaration
@@ -26,7 +26,7 @@ void setup()
   Serial.begin(9600);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
-  aqCm = new AirQualitySensorCommunicationManager(mqttHandler);
+  aqCommMgr = new AirQualitySensorCommunicationManager(mqttHandler);
   initSensors();
 
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
@@ -53,7 +53,7 @@ void loop()
   WiFi.forceSleepBegin();
   delay(500);
 
-  delay(TEN_MIN);
+  delay(60000);
 
   WiFi.forceSleepWake();
   delay(500);
@@ -85,6 +85,6 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
 
 void initSensors()
 {
-  AirQualitySensorConfig aqSensorConfig = AirQualitySensorConfig(Type_MQ135);
-  sensorHandler = new SensorHandler(aqSensorConfig, aqCm);
+  AirQualitySensorConfig aqConf = AirQualitySensorConfig(Type_MQ135);
+  sensorHandler = new SensorHandler(aqConf, aqCommMgr);
 }

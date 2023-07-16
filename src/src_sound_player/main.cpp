@@ -20,7 +20,7 @@ SoundPlayerCommunicationManager *communicationManager;
 SensorHandler *sensorHandler;
 
 void connectToWifi();
-void connectToMqtt();
+void initCommunicationManager();
 void initSensors();
 void startAudioPlayer(void *);
 void startSensor(void *);
@@ -33,11 +33,14 @@ void setup()
   delay(500);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
-  communicationManager = new SoundPlayerCommunicationManager(mqttHandler, spConfig.MqttTopicSensorTemperature);
+
   audioPlayer = new AudioPlayer();
+
+  initCommunicationManager();
+
   initSensors();
 
-  connectToMqtt();
+  mqttHandler->connect();
   delay(500);
 
   xTaskCreatePinnedToCore(
@@ -85,17 +88,6 @@ void connectToWifi()
   Serial.println("");
 }
 
-void connectToMqtt()
-{
-  communicationManager->onVolumeChangeRequest([](string payload)
-                                              { audioPlayer->onVolumeChangeRequested(payload); });
-  communicationManager->onStateChangeRequest([](string payload)
-                                             { audioPlayer->onStateChangeRequested(payload); });
-  communicationManager->onGenreChangeRequest([](string payload)
-                                             { audioPlayer->onGenreChangeRequested(payload); });
-  mqttHandler->connect();
-}
-
 void startAudioPlayer(void *parameter)
 {
   audioPlayer->setPublishStateFn([](String payload)
@@ -115,6 +107,19 @@ void startSensor(void *parameter)
     sensorHandler->publishAll();
     vTaskDelay(xDelay);
   }
+}
+
+void initCommunicationManager()
+{
+  communicationManager = new SoundPlayerCommunicationManager(
+      mqttHandler,
+      spConfig.MqttTopicSensorTemperature,
+      [](string payload)
+      { audioPlayer->onVolumeChangeRequested(payload); },
+      [](string payload)
+      { audioPlayer->onStateChangeRequested(payload); },
+      [](string payload)
+      { audioPlayer->onGenreChangeRequested(payload); });
 }
 
 void initSensors()

@@ -15,7 +15,7 @@ struct MqttHandler
   void connect();
   void disconnect();
   void subscribe(const char *topic, uint8_t qos = 0);
-  void publishPayload(const char *topic, const char *payload, bool retain = false);
+  void publishPayload(String topic, String payload, bool retain = false);
   void onMessage(OnMessageCallback);
   void onConnect(OnConnectCallback);
 };

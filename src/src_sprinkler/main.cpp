@@ -46,8 +46,10 @@ void setup()
   delay(500);
 
   sensorHandler->publishAll();
+  delay(500);
 
   communicationManager->publishState("esp_board", "on");
+  delay(500);
 
   // leave 10s for program upload and watering requests
   delay(10000);
@@ -148,9 +150,11 @@ void onWaterRequest(std::string payload)
 
 void initCommunicationManager()
 {
-  communicationManager = new SprinklerCommunicationManager(mqttHandler, sprinklerConfig.MqttTopicSensorTemperature);
-  communicationManager->onWaterRequest(onWaterRequest);
-  communicationManager->onFanRequest(onFanRequest);
+  communicationManager = new SprinklerCommunicationManager(
+      mqttHandler,
+      sprinklerConfig.MqttTopicSensorTemperature,
+      onWaterRequest,
+      onFanRequest);
 }
 
 void initSensorHandler()

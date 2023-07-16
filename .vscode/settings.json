@@ -56,7 +56,9 @@
     "set": "cpp",
     "ratio": "cpp",
     "ranges": "cpp",
-    "variant": "cpp"
+    "variant": "cpp",
+    "bitset": "cpp",
+    "regex": "cpp"
   },
   "cmake.configureOnOpen": false
 }

@@ -46,16 +46,19 @@ void MqttHandler::onMessage(OnMessageCallback onMessageCallback)
   mqttClient.onMessage(onMessageCallback);
 }
 
-void MqttHandler::publishPayload(const char *topic, const char *payload, bool retain)
+void MqttHandler::publishPayload(String topic, String payload, bool retain)
 {
+  const char *topicCStr = topic.c_str();
+  const char *payloadCStr = payload.c_str();
+
   if (!mqttClient.connected())
   {
-    Serial.printf("MQTT client is disconnected, unable to send payload to topic %s\n", topic);
+    Serial.printf("MQTT client is disconnected, unable to send payload to topic %s\n", topicCStr);
     return;
   }
 
-  mqttClient.publish(topic, 0, retain, payload);
-  Serial.printf("Payload published to topic %s: %s\n", topic, payload);
+  mqttClient.publish(topicCStr, 0, retain, payloadCStr);
+  Serial.printf("Payload published to topic %s: %s\n", topicCStr, payloadCStr);
 }
 
 void onDisconnect(AsyncMqttClientDisconnectReason reason)
