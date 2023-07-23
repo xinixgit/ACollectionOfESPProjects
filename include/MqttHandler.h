@@ -9,9 +9,7 @@ typedef std::function<void(bool)> OnConnectCallback;
 
 struct MqttHandler
 {
-  MqttConfig *config;
-
-  MqttHandler(MqttConfig *);
+  void init(MqttConfig &);
   void connect();
   void disconnect();
   void subscribe(const char *topic, uint8_t qos = 0);

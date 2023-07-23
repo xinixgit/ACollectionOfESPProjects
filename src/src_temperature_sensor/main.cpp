@@ -11,10 +11,9 @@
 Config config;
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
-MqttHandler *mqttHandler;
-TempSensorCommunicationManager *tempCommMgr;
-AirQualitySensorCommunicationManager *aqCommMgr;
-SensorHandler *sensorHandler;
+MqttHandler mqttHandler;
+TempSensorCommunicationManager tempCommMgr;
+SensorHandler sensorHandler;
 
 // functions declaration
 void connectToWifi();
@@ -26,9 +25,10 @@ void setup()
 {
   Serial.begin(9600);
 
-  mqttHandler = new MqttHandler(&config.mqtt_config);
-  tempCommMgr = new TempSensorCommunicationManager(mqttHandler, MQTT_TOPIC_SENSOR_TEMPERATURE_KITCHEN);
-  aqCommMgr = new AirQualitySensorCommunicationManager(mqttHandler);
+  mqttHandler.init(config.mqtt_config);
+
+  tempCommMgr.init(&mqttHandler, MQTT_TOPIC_SENSOR_TEMPERATURE);
+
   initSensors();
 
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
@@ -40,13 +40,13 @@ void loop()
   connectToWifi();
   delay(500);
 
-  mqttHandler->connect();
+  mqttHandler.connect();
   delay(500);
 
-  sensorHandler->publishAll();
+  sensorHandler.publishAll();
   delay(500);
 
-  mqttHandler->disconnect();
+  mqttHandler.disconnect();
   delay(500);
 
   WiFi.mode(WIFI_OFF);
@@ -55,7 +55,7 @@ void loop()
   WiFi.forceSleepBegin();
   delay(500);
 
-  delay(TEN_MIN);
+  delay(30000);
 
   WiFi.forceSleepWake();
   delay(500);
@@ -87,7 +87,6 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
 
 void initSensors()
 {
-  TemperatureSensorConfig tempConfig = TemperatureSensorConfig(Type_ENS210);
-  AirQualitySensorConfig aqConf = AirQualitySensorConfig(ENS160, LOCATION_KITCHEN);
-  sensorHandler = new SensorHandler(tempConfig, tempCommMgr, aqConf, aqCommMgr);
+  TemperatureSensorConfig tempConfig = TemperatureSensorConfig(AHT21);
+  sensorHandler.init(tempConfig, &tempCommMgr);
 }

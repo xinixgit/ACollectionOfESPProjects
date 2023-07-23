@@ -7,9 +7,9 @@
 #include "Config.h"
 
 int volume = 10; // default volume
-AudioMenu audioMenu;
 
 Audio audio;
+AudioMenu audioMenu;
 AudioSource *audioSource;
 PublishState publishStateFn;
 
@@ -43,7 +43,7 @@ void publishState(bool isRunning, int volume, const char *title = NULL, AudioMen
   }
 }
 
-AudioPlayer::AudioPlayer()
+void AudioPlayer::init()
 {
   audioSource = new SDAudioSource();
   // Connect MAX98357 I2S Amplifier Module

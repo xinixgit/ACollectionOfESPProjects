@@ -341,58 +341,63 @@ AirQualitySensor *initAirQualitySensor(AirQualitySensorConfig);
 
 struct SensorHandler
 {
-  std::list<Sensor *> sensors;
-  TempSensorCommunicationManager *tempCm;
-  AirQualitySensorCommunicationManager *aqCm;
+  std::list<Sensor *> _sensors;
+  TempSensorCommunicationManager *_tempCm;
+  AirQualitySensorCommunicationManager *_aqCm;
 
-  SensorHandler(std::list<Sensor *> sensors)
+  void init(std::list<Sensor *> sensors)
   {
-    this->sensors = sensors;
-  };
+    _sensors = sensors;
+  }
 
-  SensorHandler(
+  void init(
       AirQualitySensorConfig aqSensorConfig,
-      AirQualitySensorCommunicationManager *aqCm) : SensorHandler(TemperatureSensorConfig(), nullptr, aqSensorConfig, aqCm) {}
+      AirQualitySensorCommunicationManager *aqCm)
+  {
+    this->init(TemperatureSensorConfig(), nullptr, aqSensorConfig, aqCm);
+  }
 
-  SensorHandler(
-      TemperatureSensorConfig tempSensorConfig,
-      TempSensorCommunicationManager *tempCm) : SensorHandler(tempSensorConfig, tempCm, AirQualitySensorConfig(), nullptr) {}
+  void init(TemperatureSensorConfig tempSensorConfig,
+            TempSensorCommunicationManager *tempCm)
+  {
+    this->init(tempSensorConfig, tempCm, AirQualitySensorConfig(), nullptr);
+  }
 
-  SensorHandler(
+  void init(
       TemperatureSensorConfig tempSensorConfig,
       TempSensorCommunicationManager *tempCm,
       AirQualitySensorConfig aqSensorConfig,
       AirQualitySensorCommunicationManager *aqCm)
   {
-    this->tempCm = tempCm;
-    this->aqCm = aqCm;
+    _tempCm = tempCm;
+    _aqCm = aqCm;
 
     auto tempSensor = initTemperatureSensor(tempSensorConfig);
     if (tempSensor != nullptr)
     {
-      this->sensors.push_back(tempSensor);
+      _sensors.push_back(tempSensor);
     }
 
     auto aqSensor = initAirQualitySensor(aqSensorConfig);
     if (aqSensor != nullptr)
     {
-      this->sensors.push_back(aqSensor);
+      _sensors.push_back(aqSensor);
     }
   }
 
   void publishAll()
   {
-    for (auto sensor : sensors)
+    for (auto sensor : _sensors)
     {
-      if (sensor->getCategory() == Temperature && tempCm != nullptr)
+      if (sensor->getCategory() == Temperature && _tempCm != nullptr)
       {
         String json = sensor->createPayload();
-        tempCm->publishTemperature(json);
+        _tempCm->publishTemperature(json);
       }
-      else if (sensor->getCategory() == AirQuality && aqCm != nullptr)
+      else if (sensor->getCategory() == AirQuality && _aqCm != nullptr)
       {
         String json = sensor->createPayload();
-        aqCm->publishAirQuality(json);
+        _aqCm->publishAirQuality(json);
       }
     }
   }

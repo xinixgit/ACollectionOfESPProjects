@@ -14,10 +14,10 @@
 #define TEN_MIN 600000
 
 Config config;
-AudioPlayer *audioPlayer;
-MqttHandler *mqttHandler;
-SoundPlayerCommunicationManager *communicationManager;
-SensorHandler *sensorHandler;
+AudioPlayer audioPlayer;
+MqttHandler mqttHandler;
+SoundPlayerCommunicationManager communicationManager;
+SensorHandler sensorHandler;
 
 void connectToWifi();
 void initCommunicationManager();
@@ -32,15 +32,15 @@ void setup()
   connectToWifi();
   delay(500);
 
-  mqttHandler = new MqttHandler(&config.mqtt_config);
+  mqttHandler.init(config.mqtt_config);
 
-  audioPlayer = new AudioPlayer();
+  audioPlayer.init();
 
   initCommunicationManager();
 
   initSensors();
 
-  mqttHandler->connect();
+  mqttHandler.connect();
   delay(500);
 
   xTaskCreatePinnedToCore(
@@ -95,12 +95,12 @@ void connectToWifi()
 
 void startAudioPlayer(void *parameter)
 {
-  audioPlayer->setPublishStateFn([](String payload)
-                                 { communicationManager->publishState(payload); });
-  audioPlayer->play();
+  audioPlayer.setPublishStateFn([](String payload)
+                                { communicationManager.publishState(payload); });
+  audioPlayer.play();
   for (;;)
   {
-    audioPlayer->loop();
+    audioPlayer.loop();
   }
 }
 
@@ -109,27 +109,27 @@ void startSensor(void *parameter)
   const TickType_t xDelay = TEN_MIN / portTICK_PERIOD_MS;
   for (;;)
   {
-    sensorHandler->publishAll();
+    sensorHandler.publishAll();
     vTaskDelay(xDelay);
   }
 }
 
 void initCommunicationManager()
 {
-  communicationManager = new SoundPlayerCommunicationManager(
-      mqttHandler,
+  communicationManager.init(
+      &mqttHandler,
       spConfig.MqttTopicSensorTemperature,
       [](string payload)
-      { audioPlayer->onVolumeChangeRequested(payload); },
+      { audioPlayer.onVolumeChangeRequested(payload); },
       [](string payload)
-      { audioPlayer->onStateChangeRequested(payload); },
+      { audioPlayer.onStateChangeRequested(payload); },
       [](string payload)
-      { audioPlayer->onGenreChangeRequested(payload); });
+      { audioPlayer.onGenreChangeRequested(payload); });
 }
 
 void initSensors()
 {
   TemperatureSensorConfig tempSensorConfig = TemperatureSensorConfig(DHT11Sensor);
   tempSensorConfig.DHTPin = 21;
-  sensorHandler = new SensorHandler(tempSensorConfig, communicationManager);
+  sensorHandler.init(tempSensorConfig, &communicationManager);
 }

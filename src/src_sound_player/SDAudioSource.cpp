@@ -3,7 +3,7 @@
 #include "FS.h"
 #include "Config.h"
 
-void fetchAudios(File, std::map<String, list<String>> &audios, String genre = "");
+void fetchAudios(File &, std::map<String, list<String>> &audios, String genre = "");
 
 SDAudioSource::SDAudioSource()
 {
@@ -30,7 +30,7 @@ void SDAudioSource::populateAudioMenu(AudioMenu &menu)
   menu.selectedGenre = spConfig.defaultAudioGenre;
 }
 
-void fetchAudios(File dir, std::map<String, list<String>> &audios, String genre)
+void fetchAudios(File &dir, std::map<String, list<String>> &audios, String genre)
 {
   while (true)
   {

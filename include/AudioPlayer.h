@@ -8,7 +8,7 @@ typedef std::function<void(String)> PublishState;
 // keeps the logic of manipulating the "audio" lib to play audio
 struct AudioPlayer
 {
-  AudioPlayer();
+  void init();
   void play();
   void resume();
   void pause();

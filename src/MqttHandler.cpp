@@ -7,13 +7,11 @@ AsyncMqttClient mqttClient;
 void onDisconnect(AsyncMqttClientDisconnectReason);
 void onPublish(uint16_t);
 
-MqttHandler::MqttHandler(MqttConfig *config)
+void MqttHandler::init(MqttConfig &config)
 {
-  this->config = config;
-
-  mqttClient.setCleanSession(this->config->cleanSession);
-  mqttClient.setServer(this->config->host.c_str(), this->config->port);
-  mqttClient.setCredentials(this->config->username.c_str(), this->config->password.c_str());
+  mqttClient.setCleanSession(config.cleanSession);
+  mqttClient.setServer(config.host.c_str(), config.port);
+  mqttClient.setCredentials(config.username.c_str(), config.password.c_str());
   mqttClient.onDisconnect(onDisconnect);
   mqttClient.onPublish(onPublish);
 }

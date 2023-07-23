@@ -28,36 +28,30 @@ struct MessageTriggeredAction
 
 struct CommunicationManager
 {
-  MqttHandler *mqttHandler;
-  std::vector<MessageTriggeredAction> messageTriggeredActions;
+  MqttHandler *_mqttHandler;
 
-  CommunicationManager(MqttHandler *mqttHandler)
+  void init(MqttHandler *mqttHandler, std::vector<MessageTriggeredAction> messageTriggeredActions = {})
   {
-    this->mqttHandler = mqttHandler;
+    _mqttHandler = mqttHandler;
+    _mqttHandler->onConnect([this, messageTriggeredActions](bool sessionPresent)
+                            { this->onConnect(sessionPresent, messageTriggeredActions); });
+    _mqttHandler->onMessage([this, messageTriggeredActions](char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
+                            { this->onMessage(topic, payload, properties, len, index, total, messageTriggeredActions); });
   }
 
-  virtual void init(std::vector<MessageTriggeredAction> messageTriggeredActions = {})
-  {
-    this->messageTriggeredActions = messageTriggeredActions;
-    this->mqttHandler->onConnect([this](bool sessionPresent)
-                                 { this->onConnect(sessionPresent); });
-    this->mqttHandler->onMessage([this](char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
-                                 { this->onMessage(topic, payload, properties, len, index, total); });
-  }
-
-  virtual void onConnect(bool sessionPresent)
+  virtual void onConnect(bool sessionPresent, std::vector<MessageTriggeredAction> messageTriggeredActions)
   {
     Serial.println("Connected to MQTT.");
     if (messageTriggeredActions.size() > 0)
     {
       for (auto action : messageTriggeredActions)
       {
-        mqttHandler->subscribe(action.topic.c_str(), action.qos);
+        _mqttHandler->subscribe(action.topic.c_str(), action.qos);
       }
     }
   }
 
-  virtual void onMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
+  virtual void onMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total, std::vector<MessageTriggeredAction> messageTriggeredActions)
   {
     std::string payloadStr;
     if (len > 0)
@@ -83,77 +77,78 @@ struct CommunicationManager
 // ------------------------------ TemperatureSensorCommunicationManager ------------------------------
 struct TempSensorCommunicationManager : CommunicationManager
 {
-  String topic;
-  TempSensorCommunicationManager(
-      MqttHandler *mqttHandler,
-      String topic = MQTT_TOPIC_SENSOR_TEMPERATURE) : CommunicationManager(mqttHandler)
+  String _topic;
+
+  void init(MqttHandler *mqttHandler, String topic = MQTT_TOPIC_SENSOR_TEMPERATURE, std::vector<MessageTriggeredAction> actions = {})
   {
-    this->topic = topic;
+    _topic = topic;
+    CommunicationManager::init(mqttHandler, actions);
   }
 
   void publishTemperature(String payload)
   {
-    mqttHandler->publishPayload(topic, payload);
+    _mqttHandler->publishPayload(_topic, payload);
   }
 };
 
 struct AirQualitySensorCommunicationManager : CommunicationManager
 {
-  String topic;
-  AirQualitySensorCommunicationManager(
+  String _topic;
+
+  void init(
       MqttHandler *mqttHandler,
       String topic = MQTT_TOPIC_SENSOR_AQI,
-      std::vector<MessageTriggeredAction> messageTriggeredActions = {}) : CommunicationManager(mqttHandler)
+      std::vector<MessageTriggeredAction> messageTriggeredActions = {})
   {
-    this->topic = topic;
-    init(messageTriggeredActions);
+    _topic = topic;
+    CommunicationManager::init(mqttHandler, messageTriggeredActions);
   }
 
   void publishAirQuality(String payload)
   {
-    mqttHandler->publishPayload(topic, payload);
+    _mqttHandler->publishPayload(_topic, payload);
   }
 };
 
 // ------------------------------ SoundPlayerCommunicationManager ------------------------------
 struct SoundPlayerCommunicationManager : TempSensorCommunicationManager
 {
-  SoundPlayerCommunicationManager(
+  void init(
       MqttHandler *mqttHandler,
       String topic,
       MessageTriggeredActionFn volumeChangeRequestCallback,
       MessageTriggeredActionFn stateChangeRequestCallback,
-      MessageTriggeredActionFn genreChangeRequestCallback) : TempSensorCommunicationManager(mqttHandler, topic)
+      MessageTriggeredActionFn genreChangeRequestCallback)
   {
     std::vector<MessageTriggeredAction> actions{
         MessageTriggeredAction(spConfig.MqttTopicChangeState, stateChangeRequestCallback, 1),
         MessageTriggeredAction(spConfig.MqttTopicChangeVol, volumeChangeRequestCallback, 1),
         MessageTriggeredAction(spConfig.MqttTopicChangeGenre, genreChangeRequestCallback, 1)};
 
-    init(actions);
+    TempSensorCommunicationManager::init(mqttHandler, topic, actions);
   }
+
   void publishState(String payload)
   {
-    mqttHandler->publishPayload(spConfig.MqttTopicStateChanged, payload);
+    _mqttHandler->publishPayload(spConfig.MqttTopicStateChanged, payload);
   }
 };
 
 // ------------------------------ SprinklerCommunicationManager ------------------------------
 struct SprinklerCommunicationManager : TempSensorCommunicationManager
 {
-  SprinklerConfig *config;
+  SprinklerConfig config;
 
-  SprinklerCommunicationManager(
-      MqttHandler *mqttHandler,
-      String topic,
-      MessageTriggeredActionFn waterRequestCallback,
-      MessageTriggeredActionFn fanRequestCallback) : TempSensorCommunicationManager(mqttHandler, topic)
+  void init(MqttHandler *mqttHandler,
+            String topic,
+            MessageTriggeredActionFn waterRequestCallback,
+            MessageTriggeredActionFn fanRequestCallback)
   {
-    config = new SprinklerConfig();
     std::vector<MessageTriggeredAction> actions{
-        MessageTriggeredAction(config->MqttTopicWater, waterRequestCallback, 1),
-        MessageTriggeredAction(config->MqttTopicFan, fanRequestCallback, 1)};
-    init(actions);
+        MessageTriggeredAction(config.MqttTopicWater, waterRequestCallback, 1),
+        MessageTriggeredAction(config.MqttTopicFan, fanRequestCallback, 1)};
+
+    TempSensorCommunicationManager::init(mqttHandler, topic, actions);
   }
   void publishState(String item, String state)
   {
@@ -163,29 +158,7 @@ struct SprinklerCommunicationManager : TempSensorCommunicationManager
     String payload;
     serializeJson(doc, payload);
 
-    mqttHandler->publishPayload(config->MqttTopicStateChanged, payload);
-  }
-};
-
-struct FeederCommunicationManager : CommunicationManager
-{
-  FeederCommunicationManager(
-      MqttHandler *mqttHandler,
-      MessageTriggeredActionFn feedRequestCallback) : CommunicationManager(mqttHandler)
-  {
-    std::vector<MessageTriggeredAction> actions{
-        MessageTriggeredAction(feederConfig.MqttTopicFeed, feedRequestCallback)};
-    init(actions);
-  }
-  void publishState(String item, String state)
-  {
-    DynamicJsonDocument doc(64);
-    doc["item"] = item.c_str();
-    doc["state"] = state.c_str();
-    String payload;
-    serializeJson(doc, payload);
-
-    mqttHandler->publishPayload(feederConfig.MqttTopicStateChanged, payload);
+    _mqttHandler->publishPayload(config.MqttTopicStateChanged, payload);
   }
 };
 
