@@ -12,6 +12,7 @@ Config config;
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 MqttHandler *mqttHandler;
+TempSensorCommunicationManager *tempCommMgr;
 AirQualitySensorCommunicationManager *aqCommMgr;
 SensorHandler *sensorHandler;
 
@@ -26,6 +27,7 @@ void setup()
   Serial.begin(9600);
 
   mqttHandler = new MqttHandler(&config.mqtt_config);
+  tempCommMgr = new TempSensorCommunicationManager(mqttHandler, MQTT_TOPIC_SENSOR_TEMPERATURE_KITCHEN);
   aqCommMgr = new AirQualitySensorCommunicationManager(mqttHandler);
   initSensors();
 
@@ -53,7 +55,7 @@ void loop()
   WiFi.forceSleepBegin();
   delay(500);
 
-  delay(60000);
+  delay(TEN_MIN);
 
   WiFi.forceSleepWake();
   delay(500);
@@ -85,6 +87,7 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
 
 void initSensors()
 {
-  AirQualitySensorConfig aqConf = AirQualitySensorConfig(Type_MQ135);
-  sensorHandler = new SensorHandler(aqConf, aqCommMgr);
+  TemperatureSensorConfig tempConfig = TemperatureSensorConfig(Type_ENS210);
+  AirQualitySensorConfig aqConf = AirQualitySensorConfig(ENS160, LOCATION_KITCHEN);
+  sensorHandler = new SensorHandler(tempConfig, tempCommMgr, aqConf, aqCommMgr);
 }

@@ -39,8 +39,8 @@ void setup()
   mqttConfig->cleanSession = false;
   mqttHandler = new MqttHandler(mqttConfig);
 
-  initSensorHandler();
   initCommunicationManager();
+  initSensorHandler();
 
   mqttHandler->connect();
   delay(500);

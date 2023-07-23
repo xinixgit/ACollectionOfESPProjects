@@ -12,7 +12,7 @@ MqttHandler::MqttHandler(MqttConfig *config)
   this->config = config;
 
   mqttClient.setCleanSession(this->config->cleanSession);
-  mqttClient.setServer(this->config->host, this->config->port);
+  mqttClient.setServer(this->config->host.c_str(), this->config->port);
   mqttClient.setCredentials(this->config->username.c_str(), this->config->password.c_str());
   mqttClient.onDisconnect(onDisconnect);
   mqttClient.onPublish(onPublish);

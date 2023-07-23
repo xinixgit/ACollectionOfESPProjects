@@ -147,7 +147,7 @@ struct SprinklerCommunicationManager : TempSensorCommunicationManager
       MqttHandler *mqttHandler,
       String topic,
       MessageTriggeredActionFn waterRequestCallback,
-      MessageTriggeredActionFn fanRequestCallback) : TempSensorCommunicationManager(mqttHandler)
+      MessageTriggeredActionFn fanRequestCallback) : TempSensorCommunicationManager(mqttHandler, topic)
   {
     config = new SprinklerConfig();
     std::vector<MessageTriggeredAction> actions{
@@ -164,6 +164,28 @@ struct SprinklerCommunicationManager : TempSensorCommunicationManager
     serializeJson(doc, payload);
 
     mqttHandler->publishPayload(config->MqttTopicStateChanged, payload);
+  }
+};
+
+struct FeederCommunicationManager : CommunicationManager
+{
+  FeederCommunicationManager(
+      MqttHandler *mqttHandler,
+      MessageTriggeredActionFn feedRequestCallback) : CommunicationManager(mqttHandler)
+  {
+    std::vector<MessageTriggeredAction> actions{
+        MessageTriggeredAction(feederConfig.MqttTopicFeed, feedRequestCallback)};
+    init(actions);
+  }
+  void publishState(String item, String state)
+  {
+    DynamicJsonDocument doc(64);
+    doc["item"] = item.c_str();
+    doc["state"] = state.c_str();
+    String payload;
+    serializeJson(doc, payload);
+
+    mqttHandler->publishPayload(feederConfig.MqttTopicStateChanged, payload);
   }
 };
 

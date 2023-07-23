@@ -66,6 +66,11 @@ void setup()
 
 void loop()
 {
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    ESP.restart();
+  }
+  delay(1000);
 }
 
 void connectToWifi()

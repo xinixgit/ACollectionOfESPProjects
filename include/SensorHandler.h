@@ -7,6 +7,7 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_AHTX0.h>
 #include <ScioSense_ENS160.h>
+#include "ens210.h"
 #include <DHT.h>
 #include "MQ135.h"
 #include <list>
@@ -25,7 +26,8 @@ enum TemperatureSensorType
   NoopTempSensor,
   DHT11Sensor,
   BME280Sensor,
-  AHT21
+  AHT21,
+  Type_ENS210
 };
 
 enum AirQualitySensorType
@@ -189,6 +191,35 @@ struct AHT21Sensor : TemperatureSensor
   }
 };
 
+struct ENS210Sensor : TemperatureSensor
+{
+  ENS210 *ens210;
+  ENS210Sensor(ENS210 *ens210)
+  {
+    this->ens210 = ens210;
+  }
+
+  String createPayload()
+  {
+    int t_data, t_status, h_data, h_status;
+    ens210->measure(&t_data, &t_status, &h_data, &h_status);
+
+    DynamicJsonDocument doc(128);
+    if (t_status == ENS210_STATUS_OK)
+    {
+      doc["temperature_f"] = ens210->toFahrenheit(t_data, 10) / 10.0 - 13.0;
+    }
+    if (h_status == ENS210_STATUS_OK)
+    {
+      doc["humidity"] = ens210->toPercentageH(h_data, 1);
+    }
+
+    String payload;
+    serializeJson(doc, payload);
+    return payload;
+  }
+};
+
 struct AirQualitySensor : Sensor
 {
   String location;
@@ -281,6 +312,13 @@ struct ENS160Sensor : AirQualitySensor
   {
     return this->sensor->geteCO2();
   };
+
+  String createPayload()
+  {
+    this->sensor->measure(true);
+    this->sensor->measureRaw(true);
+    return AirQualitySensor::createPayload();
+  }
 };
 
 struct MQ135Sensor : AirQualitySensor

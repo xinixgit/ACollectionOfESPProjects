@@ -48,7 +48,7 @@ void setup()
   xTaskCreatePinnedToCore(
       startWebStream,
       "Start web stream",
-      4096,
+      8192,
       NULL,
       4,
       NULL,
@@ -59,7 +59,7 @@ void setup()
   mqttHandler->connect();
   delay(500);
 
-  tempCm = new TempSensorCommunicationManager(mqttHandler);
+  tempCm = new TempSensorCommunicationManager(mqttHandler, camConfig.MqttTopicSensorTemperature);
   delay(500);
 
   initSensorHandler();
@@ -70,6 +70,11 @@ void setup()
 
 void loop()
 {
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    ESP.restart();
+  }
+
   sensorHandler->publishAll();
   delay(TEN_MIN);
 }

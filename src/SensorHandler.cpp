@@ -62,6 +62,19 @@ TemperatureSensor *initTemperatureSensor(TemperatureSensorConfig sensorConfig)
     return new AHT21Sensor(aht);
   }
 
+  case Type_ENS210:
+  {
+    ENS210 *ens210 = new ENS210();
+    Wire.begin(sensorConfig.SDAPin, sensorConfig.SCLPin);
+    bool ok = ens210->begin();
+    if (!ok)
+    {
+      Serial.println("ENS210 not initiated.");
+      return nullptr;
+    }
+    return new ENS210Sensor(ens210);
+  }
+
   default:
     Serial.printf("Cannot find the temp sensor type specified: %d", sensorConfig.type);
     return nullptr;
