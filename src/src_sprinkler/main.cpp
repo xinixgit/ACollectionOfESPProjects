@@ -9,9 +9,9 @@
 
 Config config;
 SprinklerConfig sprinklerConfig;
-MqttHandler *mqttHandler;
-SprinklerCommunicationManager *communicationManager;
-SensorHandler *sensorHandler;
+MqttHandler mqttHandler;
+SprinklerCommunicationManager communicationManager;
+SensorHandler sensorHandler;
 bool doWater = false;
 int waterOnDurationInMs = 0;
 bool doFan = false;
@@ -19,6 +19,7 @@ int fanOnDurationInMs = 0;
 
 // functions declaration
 void connectToWifi();
+void initMqttHandler();
 void initSensorHandler();
 void initCommunicationManager();
 void turnOnWater();
@@ -35,52 +36,60 @@ void setup()
   connectToWifi();
   delay(500);
 
-  MqttConfig *mqttConfig = &config.mqtt_config;
-  mqttConfig->cleanSession = false;
-  mqttHandler = new MqttHandler(mqttConfig);
+  initMqttHandler();
+  delay(500);
 
   initCommunicationManager();
+
   initSensorHandler();
 
-  mqttHandler->connect();
+  mqttHandler.connect();
   delay(500);
 
-  sensorHandler->publishAll();
+  communicationManager.publishState("esp_board", "on");
   delay(500);
 
-  communicationManager->publishState("esp_board", "on");
+  sensorHandler.publishAll();
   delay(500);
 
-  // leave 10s for program upload and watering requests
-  delay(10000);
+  // wait 10s for program upload and watering requests
+  unsigned long tStart = millis();
+  while (millis() - tStart < 10000)
+  {
+    delay(1000);
+  }
 
   // turn water on based on for requested duration
   if (doWater && waterOnDurationInMs > 0)
   {
     turnOnWater();
-    while (waterOnDurationInMs > 0)
+    tStart = millis();
+    while (millis() - tStart < waterOnDurationInMs)
     {
-      delay(500);
-      waterOnDurationInMs -= 500;
+      delay(1000);
     }
+    waterOnDurationInMs = 0;
     turnOffWater();
     doWater = false;
   }
+
+  delay(1000);
 
   // turn fan on based on temperature (detected in HA)
   if (doFan && fanOnDurationInMs > 0)
   {
     turnOnFan();
-    while (fanOnDurationInMs > 0)
+    tStart = millis();
+    while (millis() - tStart < fanOnDurationInMs)
     {
-      delay(500);
-      fanOnDurationInMs -= 500;
+      delay(1000);
     }
+    fanOnDurationInMs = 0;
     turnOffFan();
     doFan = false;
   }
 
-  communicationManager->publishState("esp_board", "off");
+  communicationManager.publishState("esp_board", "off");
   delay(500);
 
   ESP.deepSleep(TEN_MIN_IN_US);
@@ -88,13 +97,14 @@ void setup()
 
 void loop()
 {
+  delay(1000);
 }
 
 void connectToWifi()
 {
   WiFi.mode(WIFI_STA);
   Serial.print("Connecting to Wi-Fi network ");
-  WiFi.begin(config.wifi_ssid.c_str(), config.wifi_password.c_str());
+  WiFi.begin(config.wifi_ssid, config.wifi_password);
 
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -102,24 +112,24 @@ void connectToWifi()
     delay(1000);
   }
 
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
+  Serial.println("Connected to Wi-Fi.");
   Serial.println(WiFi.localIP());
-  Serial.println("");
 }
 
 void turnOnFan()
 {
   digitalWrite(sprinklerConfig.FanPin, HIGH);
-  communicationManager->publishState("fan", "on");
-  delay(500);
+  delay(250);
+  communicationManager.publishState("fan", "on");
+  delay(250);
 }
 
 void turnOffFan()
 {
   digitalWrite(sprinklerConfig.FanPin, LOW);
-  communicationManager->publishState("fan", "off");
-  delay(500);
+  delay(250);
+  communicationManager.publishState("fan", "off");
+  delay(250);
 }
 
 void onFanRequest(std::string payload)
@@ -131,15 +141,17 @@ void onFanRequest(std::string payload)
 void turnOnWater()
 {
   digitalWrite(sprinklerConfig.WaterPumpPin, HIGH);
-  communicationManager->publishState("water_pump", "on");
-  delay(500);
+  delay(250);
+  communicationManager.publishState("water_pump", "on");
+  delay(250);
 }
 
 void turnOffWater()
 {
   digitalWrite(sprinklerConfig.WaterPumpPin, LOW);
-  communicationManager->publishState("water_pump", "off");
-  delay(500);
+  delay(250);
+  communicationManager.publishState("water_pump", "off");
+  delay(250);
 }
 
 void onWaterRequest(std::string payload)
@@ -148,10 +160,16 @@ void onWaterRequest(std::string payload)
   waterOnDurationInMs = std::stoi(payload) * 1000;
 }
 
+void initMqttHandler()
+{
+  config.mqtt_config.cleanSession = false;
+  mqttHandler.init(config.mqtt_config);
+}
+
 void initCommunicationManager()
 {
-  communicationManager = new SprinklerCommunicationManager(
-      mqttHandler,
+  communicationManager.init(
+      &mqttHandler,
       sprinklerConfig.MqttTopicSensorTemperature,
       onWaterRequest,
       onFanRequest);
@@ -162,5 +180,5 @@ void initSensorHandler()
   TemperatureSensorConfig sensorConfig = TemperatureSensorConfig(BME280Sensor);
   sensorConfig.SCLPin = sprinklerConfig.BMESCLPin;
   sensorConfig.SDAPin = sprinklerConfig.BMESDAPin;
-  sensorHandler = new SensorHandler(sensorConfig, communicationManager);
+  sensorHandler.init(sensorConfig, &communicationManager);
 }
