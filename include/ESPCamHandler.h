@@ -25,10 +25,9 @@
 // Holds access to the camera and the SD card reader on a ESP32-CAM board
 struct ESPCamHandler
 {
-  OV2640 *cam;
-  ESPCamHandler();
+  void init();
   void takePicAndSave();
-  OV2640 *getCam() { return cam; }
+  OV2640 *getCam();
 };
 
 #endif

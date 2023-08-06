@@ -8,7 +8,9 @@
 #include "ESPCamHandler.h"
 #include "Config.h"
 
-ESPCamHandler::ESPCamHandler()
+OV2640 _cam;
+
+void ESPCamHandler::init()
 {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -37,33 +39,18 @@ ESPCamHandler::ESPCamHandler()
   config.fb_count = 2;
   config.fb_location = CAMERA_FB_IN_PSRAM;
 
-  this->cam = new OV2640();
-  this->cam->init(config);
+  _cam.init(config);
 
   // Cam settings
   sensor_t1 *s = esp_camera_sensor_get();
   s->set_brightness(s, 1);
   s->set_contrast(s, 1);
   s->set_saturation(s, 1);
-
-  Serial.println("Starting SD Card");
-  if (!SD_MMC.begin())
-  {
-    Serial.println("SD Card Mount Failed");
-    return;
-  }
-
-  uint8_t cardType = SD_MMC.cardType();
-  if (cardType == CARD_NONE)
-  {
-    Serial.println("No SD Card attached");
-    return;
-  }
 }
 
 void ESPCamHandler::takePicAndSave()
 {
-  this->cam->run();
+  _cam.run();
 
   int pictureNumber = random(0, INT_MAX);
   // Path where new picture will be saved in SD Card
@@ -79,8 +66,13 @@ void ESPCamHandler::takePicAndSave()
   }
   else
   {
-    file.write(cam->getfb(), cam->getSize()); // payload (image), payload length
+    file.write(_cam.getfb(), _cam.getSize()); // payload (image), payload length
     Serial.printf("Saved file at path: %s\n", path.c_str());
   }
   file.close();
+}
+
+OV2640 *ESPCamHandler::getCam()
+{
+  return &_cam;
 }

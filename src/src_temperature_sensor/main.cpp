@@ -55,7 +55,7 @@ void loop()
   WiFi.forceSleepBegin();
   delay(500);
 
-  delay(30000);
+  delay(TEN_MIN);
 
   WiFi.forceSleepWake();
   delay(500);

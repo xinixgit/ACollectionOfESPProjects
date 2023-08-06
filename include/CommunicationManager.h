@@ -162,4 +162,23 @@ struct SprinklerCommunicationManager : TempSensorCommunicationManager
   }
 };
 
+struct CamStreamCommunicationManager : TempSensorCommunicationManager
+{
+  void init(MqttHandler *mqttHandler,
+            CamStreamConfig &config,
+            MessageTriggeredActionFn restartRequestCallack,
+            MessageTriggeredActionFn pictureRequestCallack)
+  {
+    std::vector<MessageTriggeredAction> actions{
+        MessageTriggeredAction(config.MqttTopicRestart, restartRequestCallack),
+        MessageTriggeredAction(config.MqttTopicPicture, pictureRequestCallack),
+    };
+
+    TempSensorCommunicationManager::init(
+        mqttHandler,
+        config.MqttTopicSensorTemperature,
+        actions);
+  }
+};
+
 #endif

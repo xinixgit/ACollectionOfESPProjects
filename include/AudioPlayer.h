@@ -9,7 +9,7 @@ typedef std::function<void(String)> PublishState;
 struct AudioPlayer
 {
   void init();
-  void play();
+  void start();
   void resume();
   void pause();
   void stop();

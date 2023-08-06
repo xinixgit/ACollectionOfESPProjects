@@ -1,41 +1,20 @@
 #include "WebStreamer.h"
 
-#define MSEC_PER_FRAME 100 // 10 fps
+ESPCamHandler *_camHandler;
 
-WebServer::THandlerFunction handleFn(OV2640 *, WebServer *);
-
-audp::WebStreamer::WebStreamer(ESPCamHandler *camHandler)
+void audp::WebStreamer::setCamHandler(ESPCamHandler *camHandler)
 {
-  this->camHandler = camHandler;
-  this->server = new WebServer(80);
-  this->server->on("/jpg", HTTP_GET, handleFn(this->camHandler->getCam(), this->server));
+  _camHandler = camHandler;
 }
 
-WebServer::THandlerFunction handleFn(OV2640 *cam, WebServer *server)
+void onPictureRequest(AsyncWebServerRequest *request)
 {
-  return [cam, server]()
-  {
-    WiFiClient thisClient = server->client();
-    if (!thisClient.connected())
-    {
-      return;
-    }
-    cam->run();
-
-    String response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-disposition: inline; filename=capture.jpg\r\n";
-    response += "Content-type: image/jpeg\r\n\r\n";
-    server->sendContent(response);
-    thisClient.write((char *)cam->getfb(), cam->getSize());
-  };
+  OV2640 *cam = _camHandler->getCam();
+  cam->run();
+  request->send_P(200, "image/jpeg", cam->getfb(), cam->getSize());
 }
 
-void audp::WebStreamer::begin()
+void audp::WebStreamer::begin(AsyncWebServer &_server)
 {
-  this->server->begin();
-}
-
-void audp::WebStreamer::loop()
-{
-  server->handleClient();
+  _server.on("/jpg", HTTP_GET, onPictureRequest);
 }

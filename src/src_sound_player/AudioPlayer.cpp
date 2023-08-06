@@ -54,10 +54,9 @@ void AudioPlayer::init()
 
 // only meant for external callers, internal func should use `playRandomSong`
 // since playlist should already be populated
-void AudioPlayer::play()
+void AudioPlayer::start()
 {
   audioSource->populateAudioMenu(audioMenu);
-  playRandomSong();
   publishState(audioSource->isRunning, volume, NULL, &audioMenu);
 }
 
@@ -66,8 +65,7 @@ void AudioPlayer::loop()
   audio.loop();
   if (!audio.isRunning())
   {
-    const TickType_t xDelay = 1000 / portTICK_PERIOD_MS;
-    vTaskDelay(xDelay);
+    delay(1000);
   }
 }
 

@@ -28,6 +28,11 @@ void MqttHandler::disconnect()
   mqttClient.disconnect();
 }
 
+bool MqttHandler::isConnected()
+{
+  return mqttClient.connected();
+}
+
 void MqttHandler::subscribe(const char *topic, uint8_t qos)
 {
   mqttClient.subscribe(topic, qos);

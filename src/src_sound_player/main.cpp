@@ -1,6 +1,9 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Wire.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncElegantOTA.h>
 #include "Config.h"
 #include "AudioPlayer.h"
 #include "MqttHandler.h"
@@ -18,12 +21,13 @@ AudioPlayer audioPlayer;
 MqttHandler mqttHandler;
 SoundPlayerCommunicationManager communicationManager;
 SensorHandler sensorHandler;
+AsyncWebServer server(80);
 
 void connectToWifi();
 void initCommunicationManager();
 void initSensors();
+void startWebServer();
 void startAudioPlayer(void *);
-void startSensor(void *);
 
 void setup()
 {
@@ -43,34 +47,27 @@ void setup()
   mqttHandler.connect();
   delay(500);
 
-  xTaskCreatePinnedToCore(
+  startWebServer();
+
+  xTaskCreate(
       startAudioPlayer,
       "Play audio",
       4096,
       NULL,
       10,
-      NULL,
-      0);
-  delay(500);
-
-  xTaskCreatePinnedToCore(
-      startSensor,
-      "Start publishing all sensor metrics",
-      4096,
-      NULL,
-      10,
-      NULL,
-      1);
+      NULL);
   delay(500);
 }
 
 void loop()
 {
-  if (WiFi.status() != WL_CONNECTED)
+  if (WiFi.status() != WL_CONNECTED || !mqttHandler.isConnected())
   {
     ESP.restart();
   }
-  delay(1000);
+
+  sensorHandler.publishAll();
+  delay(TEN_MIN);
 }
 
 void connectToWifi()
@@ -97,21 +94,17 @@ void startAudioPlayer(void *parameter)
 {
   audioPlayer.setPublishStateFn([](String payload)
                                 { communicationManager.publishState(payload); });
-  audioPlayer.play();
+  audioPlayer.start();
   for (;;)
   {
     audioPlayer.loop();
   }
 }
 
-void startSensor(void *parameter)
+void startWebServer()
 {
-  const TickType_t xDelay = TEN_MIN / portTICK_PERIOD_MS;
-  for (;;)
-  {
-    sensorHandler.publishAll();
-    vTaskDelay(xDelay);
-  }
+  AsyncElegantOTA.begin(&server);
+  server.begin();
 }
 
 void initCommunicationManager()
